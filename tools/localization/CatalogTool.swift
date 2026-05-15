@@ -41,6 +41,16 @@ enum ToolError: LocalizedError {
   case l10nDrift(missing: [String], extra: [String])
   case tableMappingDrift(missing: [String], mismatched: [String], extra: [String])
 
+  private static func detail(_ label: String, values: [String]) -> String? {
+    guard !values.isEmpty else { return nil }
+    let limit = 20
+    let visibleValues = values.prefix(limit).joined(separator: ", ")
+    if values.count > limit {
+      return "\(label)=\(visibleValues), ... (+\(values.count - limit) more)"
+    }
+    return "\(label)=\(visibleValues)"
+  }
+
   var errorDescription: String? {
     switch self {
     case .usage(let message):
@@ -62,9 +72,28 @@ enum ToolError: LocalizedError {
     case .duplicateKey(let key, let first, let second):
       return "Duplicate key \(key) in \(first) and \(second)"
     case .l10nDrift(let missing, let extra):
-      return "L10n drift detected. missing=\(missing.count) extra=\(extra.count)"
+      var parts = ["L10n drift detected. missing=\(missing.count) extra=\(extra.count)"]
+      if let missingKeys = Self.detail("missingKeys", values: missing) {
+        parts.append(missingKeys)
+      }
+      if let extraKeys = Self.detail("extraKeys", values: extra) {
+        parts.append(extraKeys)
+      }
+      return parts.joined(separator: "; ")
     case .tableMappingDrift(let missing, let mismatched, let extra):
-      return "L10n table mapping drift detected. missing=\(missing.count) mismatched=\(mismatched.count) extra=\(extra.count)"
+      var parts = [
+        "L10n table mapping drift detected. missing=\(missing.count) mismatched=\(mismatched.count) extra=\(extra.count)",
+      ]
+      if let missingPrefixes = Self.detail("missingPrefixes", values: missing) {
+        parts.append(missingPrefixes)
+      }
+      if let mismatchedMappings = Self.detail("mismatchedMappings", values: mismatched) {
+        parts.append(mismatchedMappings)
+      }
+      if let extraPrefixes = Self.detail("extraPrefixes", values: extra) {
+        parts.append(extraPrefixes)
+      }
+      return parts.joined(separator: "; ")
     }
   }
 }
