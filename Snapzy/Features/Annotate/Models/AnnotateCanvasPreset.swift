@@ -36,6 +36,55 @@ struct AnnotateCanvasPresetPayload: Codable, Equatable {
   var padding: CGFloat
   var shadowIntensity: CGFloat
   var cornerRadius: CGFloat
+  var aspectRatio: AspectRatioOption
+  var aspectRatioOrientation: AspectRatioOrientation
+
+  init(
+    backgroundStyle: CodableBackgroundStyle,
+    padding: CGFloat,
+    shadowIntensity: CGFloat,
+    cornerRadius: CGFloat,
+    aspectRatio: AspectRatioOption = .auto,
+    aspectRatioOrientation: AspectRatioOrientation = .horizontal
+  ) {
+    self.backgroundStyle = backgroundStyle
+    self.padding = padding
+    self.shadowIntensity = shadowIntensity
+    self.cornerRadius = cornerRadius
+    self.aspectRatio = aspectRatio
+    self.aspectRatioOrientation = aspectRatioOrientation
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case backgroundStyle
+    case padding
+    case shadowIntensity
+    case cornerRadius
+    case aspectRatio
+    case aspectRatioOrientation
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    backgroundStyle = try container.decode(CodableBackgroundStyle.self, forKey: .backgroundStyle)
+    padding = try container.decode(CGFloat.self, forKey: .padding)
+    shadowIntensity = try container.decode(CGFloat.self, forKey: .shadowIntensity)
+    cornerRadius = try container.decode(CGFloat.self, forKey: .cornerRadius)
+    let rawAspectRatio = try container.decodeIfPresent(String.self, forKey: .aspectRatio)
+    aspectRatio = rawAspectRatio.flatMap(AspectRatioOption.init(rawValue:)) ?? .auto
+    let rawAspectRatioOrientation = try container.decodeIfPresent(String.self, forKey: .aspectRatioOrientation)
+    aspectRatioOrientation = rawAspectRatioOrientation.flatMap(AspectRatioOrientation.init(rawValue:)) ?? .horizontal
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(backgroundStyle, forKey: .backgroundStyle)
+    try container.encode(padding, forKey: .padding)
+    try container.encode(shadowIntensity, forKey: .shadowIntensity)
+    try container.encode(cornerRadius, forKey: .cornerRadius)
+    try container.encode(aspectRatio.rawValue, forKey: .aspectRatio)
+    try container.encode(aspectRatioOrientation.rawValue, forKey: .aspectRatioOrientation)
+  }
 
   func approximatelyEquals(
     _ other: AnnotateCanvasPresetPayload,
@@ -44,7 +93,9 @@ struct AnnotateCanvasPresetPayload: Codable, Equatable {
     backgroundStyle == other.backgroundStyle &&
       abs(padding - other.padding) <= tolerance &&
       abs(shadowIntensity - other.shadowIntensity) <= tolerance &&
-      abs(cornerRadius - other.cornerRadius) <= tolerance
+      abs(cornerRadius - other.cornerRadius) <= tolerance &&
+      aspectRatio == other.aspectRatio &&
+      aspectRatioOrientation == other.aspectRatioOrientation
   }
 }
 

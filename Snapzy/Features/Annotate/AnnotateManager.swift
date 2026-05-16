@@ -22,6 +22,7 @@ struct AnnotationCanvasEffects {
   var cornerRadius: CGFloat = AnnotateCanvasDefaults.cornerRadius
   var imageAlignment: ImageAlignment = .center
   var aspectRatio: AspectRatioOption = .auto
+  var aspectRatioOrientation: AspectRatioOrientation = .horizontal
 }
 
 /// In-memory annotation session data for re-editing annotations

@@ -18,6 +18,8 @@ private struct AnnotateSidebarSnapshot: Equatable {
   let cornerRadius: CGFloat
   let previewCornerRadius: CGFloat?
   let imageAlignment: ImageAlignment
+  let aspectRatio: AspectRatioOption
+  let aspectRatioOrientation: AspectRatioOrientation
   let canvasPresets: [AnnotateCanvasPreset]
   let selectedCanvasPresetId: UUID?
   let isSelectedCanvasPresetDirty: Bool
@@ -33,6 +35,8 @@ private struct AnnotateSidebarSnapshot: Equatable {
     cornerRadius = state.cornerRadius
     previewCornerRadius = state.previewCornerRadius
     imageAlignment = state.imageAlignment
+    aspectRatio = state.aspectRatio
+    aspectRatioOrientation = state.aspectRatioOrientation
     canvasPresets = state.canvasPresets
     selectedCanvasPresetId = state.selectedCanvasPresetId
     isSelectedCanvasPresetDirty = state.isSelectedCanvasPresetDirty
@@ -74,11 +78,11 @@ struct AnnotateSidebarView: View, Equatable {
         // Sliders section
         slidersSection
 
+        // Ratio section
+        ratioSection
+
         // Alignment section
         alignmentSection
-
-        // Ratio section
-        // ratioSection
 
         // Mockup section (shown when mockup mode is active)
         if state.editorMode == .mockup {
@@ -529,22 +533,95 @@ struct AnnotateSidebarView: View, Equatable {
     }
   }
   
-  // private var ratioSection: some View {
-  //   VStack(alignment: .leading, spacing: 6) {
-  //     SidebarSectionHeader(title: "Ratio")
-  //     Picker("", selection: $state.aspectRatio) {
-  //       ForEach(AspectRatioOption.allCases) { option in
-  //         Text(option.rawValue).tag(option)
-  //       }
-  //     }
-  //     .pickerStyle(.menu)
-  //     .labelsHidden()
-  //     .frame(maxWidth: .infinity, alignment: .leading)
-  //   }
-  // }
+  private var ratioSection: some View {
+    VStack(alignment: .leading, spacing: Spacing.sm) {
+      HStack(spacing: Spacing.sm) {
+        SidebarSectionHeader(title: L10n.AnnotateUI.backgroundRatio)
+        Spacer(minLength: 0)
+        aspectRatioOrientationPicker
+      }
+      .frame(maxWidth: .infinity)
+
+      LazyVGrid(
+        columns: Array(repeating: GridItem(.flexible(), spacing: GridConfig.gap), count: 3),
+        spacing: GridConfig.gap
+      ) {
+        ForEach(AspectRatioOption.allCases) { option in
+          AspectRatioOptionButton(
+            option: option,
+            isSelected: state.aspectRatio == option,
+            orientation: state.aspectRatioOrientation
+          ) {
+            state.aspectRatio = option
+          }
+        }
+      }
+    }
+  }
+
+  private var aspectRatioOrientationPicker: some View {
+    Picker("", selection: Binding(
+      get: { state.aspectRatioOrientation },
+      set: { state.aspectRatioOrientation = $0 }
+    )) {
+      ForEach(AspectRatioOrientation.allCases) { orientation in
+        Image(systemName: orientation.systemImageName)
+          .tag(orientation)
+      }
+    }
+    .pickerStyle(.segmented)
+    .labelsHidden()
+    .controlSize(.mini)
+    .fixedSize(horizontal: true, vertical: false)
+    .help(L10n.AnnotateUI.toggleAspectRatioOrientation)
+  }
 }
 
 // MARK: - Compact Components
+
+struct AspectRatioOptionButton: View {
+  let option: AspectRatioOption
+  let isSelected: Bool
+  let orientation: AspectRatioOrientation
+  let action: () -> Void
+
+  @State private var isHovering = false
+
+  var body: some View {
+    Button(action: action) {
+      Text(displayName)
+        .font(Typography.labelSmall)
+        .fontWeight(isSelected ? .semibold : .medium)
+        .foregroundColor(isSelected ? .accentColor : SidebarColors.labelPrimary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity, minHeight: 30)
+        .background(
+          RoundedRectangle(cornerRadius: Size.radiusSm)
+            .fill(backgroundColor)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: Size.radiusSm)
+            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: Size.strokeSelected)
+        )
+    }
+    .buttonStyle(.plain)
+    .onHover { isHovering = $0 }
+  }
+
+  private var backgroundColor: Color {
+    if isSelected {
+      return SidebarColors.itemSelected
+    } else if isHovering {
+      return SidebarColors.itemHover
+    }
+    return SidebarColors.itemDefault
+  }
+
+  private var displayName: String {
+    option.effectiveDisplayName(orientation: orientation)
+  }
+}
 
 struct CompactColorSwatchGrid: View {
   @Binding var selectedColor: Color?

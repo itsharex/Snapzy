@@ -3667,6 +3667,11 @@ enum L10n {
       defaultValue: "or capture a screenshot to annotate",
       comment: "Empty state subtitle for annotate when no image is loaded"
     )
+    static let backgroundRatio = string(
+      "annotate.background-ratio",
+      defaultValue: "Background Ratio",
+      comment: "Section label for choosing the annotation background canvas aspect ratio"
+    )
     static let toggleRuleOfThirdsGrid = string(
       "annotate.toggle-rule-of-thirds-grid",
       defaultValue: "Toggle rule of thirds grid",
@@ -3676,6 +3681,11 @@ enum L10n {
       "annotate.toggle-crop-orientation",
       defaultValue: "Switch crop orientation",
       comment: "Tooltip for switching crop aspect ratio between landscape and portrait"
+    )
+    static let toggleAspectRatioOrientation = string(
+      "annotate.toggle-aspect-ratio-orientation",
+      defaultValue: "Switch aspect ratio orientation",
+      comment: "Tooltip for switching annotate background aspect ratio between horizontal and vertical"
     )
     static let unsavedChangesTitle = string(
       "annotate.unsaved-changes-title",

@@ -385,8 +385,21 @@ final class AnnotateState: ObservableObject {
       handleCanvasEffectDidChange()
     }
   }
-  @Published var imageAlignment: ImageAlignment = .center
-  @Published var aspectRatio: AspectRatioOption = .auto
+  @Published var imageAlignment: ImageAlignment = .center {
+    didSet {
+      handleCanvasEffectDidChange()
+    }
+  }
+  @Published var aspectRatio: AspectRatioOption = .auto {
+    didSet {
+      handleCanvasEffectDidChange()
+    }
+  }
+  @Published var aspectRatioOrientation: AspectRatioOrientation = .horizontal {
+    didSet {
+      handleCanvasEffectDidChange()
+    }
+  }
   @Published private(set) var canvasPresets: [AnnotateCanvasPreset] = []
   @Published var selectedCanvasPresetId: UUID?
   @Published private(set) var isSelectedCanvasPresetDirty: Bool = false
@@ -436,6 +449,7 @@ final class AnnotateState: ObservableObject {
       && abs(padding) <= 0.0001
       && abs(shadowIntensity) <= 0.0001
       && abs(cornerRadius) <= 0.0001
+      && aspectRatio == .auto
   }
 
   var canvasEffectsSnapshot: AnnotationCanvasEffects {
@@ -447,7 +461,8 @@ final class AnnotateState: ObservableObject {
       shadowIntensity: shadowIntensity,
       cornerRadius: cornerRadius,
       imageAlignment: imageAlignment,
-      aspectRatio: aspectRatio
+      aspectRatio: aspectRatio,
+      aspectRatioOrientation: aspectRatioOrientation
     )
   }
 
@@ -465,6 +480,7 @@ final class AnnotateState: ObservableObject {
       cornerRadius = effects.cornerRadius
       imageAlignment = effects.imageAlignment
       aspectRatio = effects.aspectRatio
+      aspectRatioOrientation = effects.aspectRatioOrientation
     }
 
     restoreCanvasPresetSelection(
@@ -519,6 +535,8 @@ final class AnnotateState: ObservableObject {
       padding = 0
       shadowIntensity = 0
       cornerRadius = 0
+      aspectRatio = .auto
+      aspectRatioOrientation = .horizontal
       previewPadding = nil
       previewShadowIntensity = nil
       previewCornerRadius = nil
@@ -541,6 +559,8 @@ final class AnnotateState: ObservableObject {
       padding = preset.payload.padding
       shadowIntensity = preset.payload.shadowIntensity
       cornerRadius = preset.payload.cornerRadius
+      aspectRatio = preset.payload.aspectRatio
+      aspectRatioOrientation = preset.payload.aspectRatioOrientation
       previewPadding = nil
       previewShadowIntensity = nil
       previewCornerRadius = nil
@@ -683,7 +703,9 @@ final class AnnotateState: ObservableObject {
       backgroundStyle: codableStyle,
       padding: padding,
       shadowIntensity: shadowIntensity,
-      cornerRadius: cornerRadius
+      cornerRadius: cornerRadius,
+      aspectRatio: aspectRatio,
+      aspectRatioOrientation: aspectRatioOrientation
     )
   }
 

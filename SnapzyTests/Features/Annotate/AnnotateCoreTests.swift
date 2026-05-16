@@ -627,6 +627,81 @@ final class AnnotateCoreTests: XCTestCase {
     XCTAssertEqual(mismatchedPixels, 0)
   }
 
+  func testAspectRatioOptionOriginalKeepsForegroundRatioWithMinimumPadding() {
+    let foregroundSize = CGSize(width: 1000, height: 600)
+
+    let canvasSize = AspectRatioOption.auto.canvasSize(
+      for: foregroundSize,
+      padding: 100,
+      alignmentSpace: 0
+    )
+
+    XCTAssertEqual(canvasSize.height, 800, accuracy: 0.0001)
+    XCTAssertEqual(canvasSize.width, 800 * (1000.0 / 600.0), accuracy: 0.0001)
+    XCTAssertEqual(canvasSize.width / canvasSize.height, 1000.0 / 600.0, accuracy: 0.0001)
+    XCTAssertGreaterThanOrEqual((canvasSize.width - foregroundSize.width) / 2, 100)
+    XCTAssertGreaterThanOrEqual((canvasSize.height - foregroundSize.height) / 2, 100)
+  }
+
+  func testAspectRatioOptionFreeKeepsPaddingOnlyCanvasSize() {
+    let canvasSize = AspectRatioOption.free.canvasSize(
+      for: CGSize(width: 1000, height: 600),
+      padding: 100,
+      alignmentSpace: 0
+    )
+
+    XCTAssertEqual(canvasSize, CGSize(width: 1200, height: 800))
+  }
+
+  func testAspectRatioOptionVerticalOrientationInvertsFixedRatio() {
+    let foregroundSize = CGSize(width: 1000, height: 600)
+
+    let canvasSize = AspectRatioOption.ratio16x9.canvasSize(
+      for: foregroundSize,
+      padding: 100,
+      alignmentSpace: 0,
+      orientation: .vertical
+    )
+
+    XCTAssertEqual(canvasSize.width, 1200, accuracy: 0.0001)
+    XCTAssertEqual(canvasSize.width / canvasSize.height, 9.0 / 16.0, accuracy: 0.0001)
+    XCTAssertGreaterThanOrEqual((canvasSize.width - foregroundSize.width) / 2, 100)
+    XCTAssertGreaterThanOrEqual((canvasSize.height - foregroundSize.height) / 2, 100)
+  }
+
+  @MainActor
+  func testAnnotateExporter_renderFinalImageUsesSelectedBackgroundAspectRatio() throws {
+    let state = makeAnnotateState()
+    let sourceImage = try makeRetinaPixelPatternImage(pixelWidth: 1000, pixelHeight: 600, scale: 1)
+    state.loadImage(sourceImage)
+    state.backgroundStyle = .solidColor(.white)
+    state.padding = 100
+    state.aspectRatio = .ratio16x9
+
+    let renderedImage = try XCTUnwrap(AnnotateExporter.renderFinalImage(state: state))
+
+    XCTAssertEqual(renderedImage.size.width / renderedImage.size.height, 16.0 / 9.0, accuracy: 0.0001)
+    XCTAssertGreaterThanOrEqual((renderedImage.size.width - sourceImage.size.width) / 2, 100)
+    XCTAssertGreaterThanOrEqual((renderedImage.size.height - sourceImage.size.height) / 2, 100)
+  }
+
+  @MainActor
+  func testAnnotateExporter_renderFinalImageUsesVerticalBackgroundAspectRatio() throws {
+    let state = makeAnnotateState()
+    let sourceImage = try makeRetinaPixelPatternImage(pixelWidth: 1000, pixelHeight: 600, scale: 1)
+    state.loadImage(sourceImage)
+    state.backgroundStyle = .solidColor(.white)
+    state.padding = 100
+    state.aspectRatio = .ratio16x9
+    state.aspectRatioOrientation = .vertical
+
+    let renderedImage = try XCTUnwrap(AnnotateExporter.renderFinalImage(state: state))
+
+    XCTAssertEqual(renderedImage.size.width / renderedImage.size.height, 9.0 / 16.0, accuracy: 0.0001)
+    XCTAssertGreaterThanOrEqual((renderedImage.size.width - sourceImage.size.width) / 2, 100)
+    XCTAssertGreaterThanOrEqual((renderedImage.size.height - sourceImage.size.height) / 2, 100)
+  }
+
   func testCodableBackgroundStyle_roundTripsSupportedStyles() throws {
     let wallpaperURL = URL(string: "file:///tmp/wallpaper.jpg")!
     let blurredURL = URL(string: "file:///tmp/blurred.jpg")!
@@ -672,6 +747,65 @@ final class AnnotateCoreTests: XCTestCase {
 
     XCTAssertTrue(first.approximatelyEquals(close))
     XCTAssertFalse(first.approximatelyEquals(different))
+  }
+
+  func testAnnotateCanvasPresetPayloadDefaultsMissingAspectRatioToOriginal() throws {
+    let data = Data("""
+    {
+      "backgroundStyle": {
+        "kind": "gradient",
+        "gradientPresetRawValue": "bluePurple"
+      },
+      "padding": 40,
+      "shadowIntensity": 0.3,
+      "cornerRadius": 12
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder().decode(AnnotateCanvasPresetPayload.self, from: data)
+
+    XCTAssertEqual(payload.aspectRatio, .auto)
+    XCTAssertEqual(payload.aspectRatioOrientation, .horizontal)
+  }
+
+  func testAnnotateCanvasPresetPayloadApproximatelyEqualsIncludesAspectRatio() {
+    let originalRatio = AnnotateCanvasPresetPayload(
+      backgroundStyle: CodableBackgroundStyle(from: .gradient(.bluePurple))!,
+      padding: 40,
+      shadowIntensity: 0.3,
+      cornerRadius: 12,
+      aspectRatio: .auto
+    )
+    let fixedRatio = AnnotateCanvasPresetPayload(
+      backgroundStyle: CodableBackgroundStyle(from: .gradient(.bluePurple))!,
+      padding: 40,
+      shadowIntensity: 0.3,
+      cornerRadius: 12,
+      aspectRatio: .ratio16x9
+    )
+
+    XCTAssertFalse(originalRatio.approximatelyEquals(fixedRatio))
+  }
+
+  func testAnnotateCanvasPresetPayloadApproximatelyEqualsIncludesAspectRatioOrientation() {
+    let horizontalRatio = AnnotateCanvasPresetPayload(
+      backgroundStyle: CodableBackgroundStyle(from: .gradient(.bluePurple))!,
+      padding: 40,
+      shadowIntensity: 0.3,
+      cornerRadius: 12,
+      aspectRatio: .ratio16x9,
+      aspectRatioOrientation: .horizontal
+    )
+    let verticalRatio = AnnotateCanvasPresetPayload(
+      backgroundStyle: CodableBackgroundStyle(from: .gradient(.bluePurple))!,
+      padding: 40,
+      shadowIntensity: 0.3,
+      cornerRadius: 12,
+      aspectRatio: .ratio16x9,
+      aspectRatioOrientation: .vertical
+    )
+
+    XCTAssertFalse(horizontalRatio.approximatelyEquals(verticalRatio))
   }
 
   @MainActor

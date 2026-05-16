@@ -302,9 +302,11 @@ final class AnnotateExporter {
     // Add alignment space for non-center alignments (matches preview)
     let alignmentSpace: CGFloat = state.imageAlignment != .center ? 40 : 0
 
-    let totalSize = NSSize(
-      width: effectiveBounds.width + padding * 2 + alignmentSpace,
-      height: effectiveBounds.height + padding * 2 + alignmentSpace
+    let totalSize: NSSize = state.aspectRatio.canvasSize(
+      for: effectiveBounds.size,
+      padding: padding,
+      alignmentSpace: alignmentSpace,
+      orientation: state.aspectRatioOrientation
     )
     outputSizeDescription = "\(Int(totalSize.width))x\(Int(totalSize.height))"
 

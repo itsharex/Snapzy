@@ -199,10 +199,14 @@ struct AnnotateCanvasView: View {
 
     // Scale is tied to the currently fitted image/crop, not to the live crop rect.
     // This keeps crop dimensions predictable while users drag handles outward.
-    let fitLogicalCanvasWidth = fitBounds.width + currentPadding * 2 + alignmentSpace
-    let fitLogicalCanvasHeight = fitBounds.height + currentPadding * 2 + alignmentSpace
-    let scaleX = availableWidth / fitLogicalCanvasWidth
-    let scaleY = availableHeight / fitLogicalCanvasHeight
+    let fitLogicalCanvasSize = state.aspectRatio.canvasSize(
+      for: fitBounds.size,
+      padding: currentPadding,
+      alignmentSpace: alignmentSpace,
+      orientation: state.aspectRatioOrientation
+    )
+    let scaleX = availableWidth / fitLogicalCanvasSize.width
+    let scaleY = availableHeight / fitLogicalCanvasSize.height
     let scale = min(scaleX, scaleY, 1.0)
 
     let foregroundBounds: CGRect
@@ -220,13 +224,16 @@ struct AnnotateCanvasView: View {
       foregroundBounds = imageBounds
     }
 
-    // Logical canvas = effective size + padding + alignment space
-    let logicalCanvasWidth = foregroundBounds.width + currentPadding * 2 + alignmentSpace
-    let logicalCanvasHeight = foregroundBounds.height + currentPadding * 2 + alignmentSpace
+    let logicalCanvasSize = state.aspectRatio.canvasSize(
+      for: foregroundBounds.size,
+      padding: currentPadding,
+      alignmentSpace: alignmentSpace,
+      orientation: state.aspectRatioOrientation
+    )
 
     // Background = logical canvas * scale (includes padding + alignment space)
-    let bgWidth = logicalCanvasWidth * scale
-    let bgHeight = logicalCanvasHeight * scale
+    let bgWidth = logicalCanvasSize.width * scale
+    let bgHeight = logicalCanvasSize.height * scale
     let viewportMetrics = AnnotateViewportMetrics(
       containerSize: containerSize,
       baseCanvasSize: CGSize(width: bgWidth, height: bgHeight),
