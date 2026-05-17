@@ -6,6 +6,22 @@
     <description>Snapzy application updates</description>
     <language>en</language>
     <item>
+      <title>Version 1.16.1</title>
+      <sparkle:version>99</sparkle:version>
+      <sparkle:shortVersionString>1.16.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Sun, 17 May 2026 08:44:55 +0000</pubDate>
+      <description><![CDATA[
+        <style>:root { color-scheme: light dark; } body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.5; padding: 8px 16px; } h3 { font-size: 14px; margin: 12px 0 6px; } ul { padding-left: 20px; margin: 4px 0; } li { margin: 3px 0; }</style>
+        <h3>✨ Features</h3><ul><li>use camera cursor in application capture mode</li></ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/duongductrong/Snapzy/releases/download/v1.16.1/Snapzy-v1.16.1.dmg"
+        sparkle:edSignature="JVFublZYNZVFGvaUu7PC9+UrXA/ntn4Q9evG2k3r45S48mo+pcefpbDDAvjeMhtPcFLpIFcBgJ4trFnBX0PNBQ=="
+        length="45980693"
+        type="application/octet-stream"/>
+    </item>
+    <item>
       <title>Version 1.16.0</title>
       <sparkle:version>98</sparkle:version>
       <sparkle:shortVersionString>1.16.0</sparkle:shortVersionString>
