@@ -54,6 +54,7 @@ final class MicrophoneAudioCapturerTests: XCTestCase {
 
     capturer.start()
 
+    XCTAssertTrue(capturer.running)
     XCTAssertEqual(factory.preferredDeviceIDs, ["external-mic-id"])
     XCTAssertEqual(factory.configureInputCallCount, 1)
   }
