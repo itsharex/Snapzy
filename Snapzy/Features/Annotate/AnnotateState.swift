@@ -33,12 +33,21 @@ final class AnnotateState: ObservableObject {
     let cutoutAutoAppliedCropRect: CGRect?
   }
 
+  private struct SharedAnnotationParameterDefaults: Codable {
+    var strokeWidth: CGFloat?
+    var cornerRadius: CGFloat?
+    var fontSize: CGFloat?
+    var watermarkOpacity: CGFloat?
+    var watermarkRotationDegrees: CGFloat?
+  }
+
   private static let importedImageMaxCoverage: CGFloat = 0.7
   private static let importedImageCascadeStep: CGFloat = 24
   private static let importedImageCountWarningThreshold: Int = 8
   private static let importedImagePixelBudgetWarningThreshold: Int64 = 40_000_000
   private static let canvasPresetLimit: Int = 20
   private let canvasPresetStore: AnnotateCanvasPresetStore
+  private let defaults: UserDefaults
   private let appliesDefaultCanvasPresetOnNewImages: Bool
   private var suppressCanvasEffectChangeTracking = false
 
@@ -103,6 +112,8 @@ final class AnnotateState: ObservableObject {
   @Published var arrowStyle: ArrowStyle = .straight
   @Published var watermarkText: String = "Snapzy"
   @Published private var annotationToolProperties: [AnnotationToolType: AnnotationProperties] = [:]
+  private var sharedAnnotationColor: Color?
+  private var sharedAnnotationParameterDefaults = SharedAnnotationParameterDefaults()
 
   // MARK: - Editor Mode
 
@@ -1106,9 +1117,11 @@ final class AnnotateState: ObservableObject {
     cloudURL: URL? = nil,
     cloudKey: String? = nil,
     isCloudStale: Bool = false,
+    defaults: UserDefaults = .standard,
     canvasPresetStore: AnnotateCanvasPresetStore? = nil,
     appliesDefaultCanvasPresetOnNewImages: Bool = true
   ) {
+    self.defaults = defaults
     self.canvasPresetStore = canvasPresetStore ?? AnnotateCanvasPresetStore.shared
     self.appliesDefaultCanvasPresetOnNewImages = appliesDefaultCanvasPresetOnNewImages
     self.sourceImage = image
@@ -1118,15 +1131,19 @@ final class AnnotateState: ObservableObject {
     self.cloudKey = cloudKey
     self.isCloudStale = isCloudStale
     self.dragToAppPreparationState = .ready
+    loadSharedAnnotationColor()
+    loadSharedAnnotationParameterDefaults()
     loadCanvasPresets()
     applyDefaultCanvasPresetForNewImageIfNeeded()
   }
 
   /// Empty initializer for drag-drop workflow
   init(
+    defaults: UserDefaults = .standard,
     canvasPresetStore: AnnotateCanvasPresetStore? = nil,
     appliesDefaultCanvasPresetOnNewImages: Bool = true
   ) {
+    self.defaults = defaults
     self.canvasPresetStore = canvasPresetStore ?? AnnotateCanvasPresetStore.shared
     self.appliesDefaultCanvasPresetOnNewImages = appliesDefaultCanvasPresetOnNewImages
     self.sourceImage = nil
@@ -1135,6 +1152,8 @@ final class AnnotateState: ObservableObject {
     self.cloudURL = nil
     self.cloudKey = nil
     self.dragToAppPreparationState = .unavailable
+    loadSharedAnnotationColor()
+    loadSharedAnnotationParameterDefaults()
     loadCanvasPresets()
   }
 
@@ -2187,13 +2206,18 @@ final class AnnotateState: ObservableObject {
     recordsUndo: Bool = false
   ) {
     guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
+    let colorUpdate = normalizedColorUpdate(
+      for: annotations[index],
+      strokeColor: strokeColor,
+      fillColor: fillColor
+    )
 
     guard annotationPropertiesWillChange(
       annotations[index],
       strokeWidth: strokeWidth,
       fontSize: fontSize,
-      strokeColor: strokeColor,
-      fillColor: fillColor,
+      strokeColor: colorUpdate.strokeColor,
+      fillColor: colorUpdate.fillColor,
       cornerRadius: cornerRadius,
       opacity: opacity,
       rotationDegrees: rotationDegrees,
@@ -2225,10 +2249,10 @@ final class AnnotateState: ObservableObject {
         )
       }
     }
-    if let strokeColor = strokeColor {
+    if let strokeColor = colorUpdate.strokeColor {
       annotations[index].properties.strokeColor = strokeColor
     }
-    if let fillColor = fillColor {
+    if let fillColor = colorUpdate.fillColor {
       annotations[index].properties.fillColor = fillColor
     }
     if let cornerRadius = cornerRadius {
@@ -2246,6 +2270,32 @@ final class AnnotateState: ObservableObject {
     hasUnsavedChanges = true
   }
 
+  func updateAnnotationPrimaryColor(
+    id: UUID,
+    color: Color,
+    recordsUndo: Bool = false
+  ) {
+    updateAnnotationProperties(
+      id: id,
+      strokeColor: color,
+      recordsUndo: recordsUndo
+    )
+    rememberSharedAnnotationColor(color)
+  }
+
+  private func normalizedColorUpdate(
+    for annotation: AnnotationItem,
+    strokeColor: Color?,
+    fillColor: Color?
+  ) -> (strokeColor: Color?, fillColor: Color?) {
+    if case .filledRectangle = annotation.type,
+       let color = strokeColor ?? fillColor {
+      return (color, color)
+    }
+
+    return (strokeColor, fillColor)
+  }
+
   private func annotationPropertiesWillChange(
     _ annotation: AnnotationItem,
     strokeWidth: CGFloat? = nil,
@@ -2258,6 +2308,12 @@ final class AnnotateState: ObservableObject {
     watermarkStyle: WatermarkStyle? = nil
   ) -> Bool {
     let properties = annotation.properties
+    let colorUpdate = normalizedColorUpdate(
+      for: annotation,
+      strokeColor: strokeColor,
+      fillColor: fillColor
+    )
+
     if let strokeWidth,
        properties.strokeWidth != AnnotationProperties.clampedControlValue(strokeWidth) {
       return true
@@ -2266,11 +2322,11 @@ final class AnnotateState: ObservableObject {
        properties.fontSize != fontSize {
       return true
     }
-    if let strokeColor,
+    if let strokeColor = colorUpdate.strokeColor,
        properties.strokeColor != strokeColor {
       return true
     }
-    if let fillColor,
+    if let fillColor = colorUpdate.fillColor,
        properties.fillColor != fillColor {
       return true
     }
@@ -2448,15 +2504,145 @@ final class AnnotateState: ObservableObject {
     }
   }
 
+  private func loadSharedAnnotationColor() {
+    guard let data = defaults.data(forKey: PreferencesKeys.annotatePrimaryColor),
+          let rgba = try? JSONDecoder().decode(RGBAColor.self, from: data) else {
+      return
+    }
+    sharedAnnotationColor = rgba.color
+    strokeColor = rgba.color
+  }
+
+  private func rememberSharedAnnotationColor(_ color: Color) {
+    guard let rgba = RGBAColor(color: color),
+          let data = try? JSONEncoder().encode(rgba) else {
+      return
+    }
+
+    sharedAnnotationColor = color
+    defaults.set(data, forKey: PreferencesKeys.annotatePrimaryColor)
+    applySharedAnnotationColorToToolDefaults(color)
+  }
+
+  private func loadSharedAnnotationParameterDefaults() {
+    guard let data = defaults.data(forKey: PreferencesKeys.annotateParameterDefaults),
+          let decoded = try? JSONDecoder().decode(SharedAnnotationParameterDefaults.self, from: data)
+    else { return }
+
+    sharedAnnotationParameterDefaults = sanitizedSharedAnnotationParameterDefaults(decoded)
+  }
+
+  private func persistSharedAnnotationParameterDefaults() {
+    guard let data = try? JSONEncoder().encode(sharedAnnotationParameterDefaults) else { return }
+    defaults.set(data, forKey: PreferencesKeys.annotateParameterDefaults)
+  }
+
+  private func sanitizedSharedAnnotationParameterDefaults(
+    _ defaults: SharedAnnotationParameterDefaults
+  ) -> SharedAnnotationParameterDefaults {
+    SharedAnnotationParameterDefaults(
+      strokeWidth: defaults.strokeWidth.map(AnnotationProperties.clampedControlValue(_:)),
+      cornerRadius: defaults.cornerRadius.map { max(0, $0) },
+      fontSize: defaults.fontSize.map { min(max($0, 12), 72) },
+      watermarkOpacity: defaults.watermarkOpacity.map(AnnotationProperties.clampedOpacity(_:)),
+      watermarkRotationDegrees: defaults.watermarkRotationDegrees.map(AnnotationProperties.clampedRotationDegrees(_:))
+    )
+  }
+
+  private func rememberSharedAnnotationStrokeWidth(_ strokeWidth: CGFloat) {
+    let clampedWidth = AnnotationProperties.clampedControlValue(strokeWidth)
+    sharedAnnotationParameterDefaults.strokeWidth = clampedWidth
+    persistSharedAnnotationParameterDefaults()
+
+    for tool in AnnotationToolType.allCases where tool.supportsQuickStrokeWidth {
+      updateDefaultAnnotationProperties(for: tool, strokeWidth: clampedWidth)
+    }
+
+    if !selectedTool.supportsQuickPropertiesBar {
+      self.strokeWidth = clampedWidth
+    }
+  }
+
+  private func rememberSharedAnnotationCornerRadius(_ cornerRadius: CGFloat) {
+    let clampedRadius = max(0, cornerRadius)
+    sharedAnnotationParameterDefaults.cornerRadius = clampedRadius
+    persistSharedAnnotationParameterDefaults()
+
+    for tool in AnnotationToolType.allCases where tool.supportsQuickCornerRadius {
+      updateDefaultAnnotationProperties(for: tool, cornerRadius: clampedRadius)
+    }
+
+    if !selectedTool.supportsQuickPropertiesBar {
+      rectangleCornerRadius = clampedRadius
+    }
+  }
+
+  private func rememberSharedAnnotationFontSize(_ fontSize: CGFloat) {
+    let clampedSize = min(max(fontSize, 12), 72)
+    sharedAnnotationParameterDefaults.fontSize = clampedSize
+    persistSharedAnnotationParameterDefaults()
+
+    updateDefaultAnnotationProperties(for: .text, fontSize: clampedSize)
+    updateDefaultAnnotationProperties(for: .watermark, fontSize: clampedSize)
+  }
+
+  private func rememberSharedWatermarkOpacity(_ opacity: CGFloat) {
+    let clampedOpacity = AnnotationProperties.clampedOpacity(opacity)
+    sharedAnnotationParameterDefaults.watermarkOpacity = clampedOpacity
+    persistSharedAnnotationParameterDefaults()
+    updateDefaultAnnotationProperties(for: .watermark, opacity: clampedOpacity)
+  }
+
+  private func rememberSharedWatermarkRotation(_ rotationDegrees: CGFloat) {
+    let clampedRotation = AnnotationProperties.clampedRotationDegrees(rotationDegrees)
+    sharedAnnotationParameterDefaults.watermarkRotationDegrees = clampedRotation
+    persistSharedAnnotationParameterDefaults()
+    updateDefaultAnnotationProperties(for: .watermark, rotationDegrees: clampedRotation)
+  }
+
+  private func applySharedAnnotationColorToToolDefaults(_ color: Color) {
+    for tool in AnnotationToolType.allCases where tool.supportsQuickStrokeColor {
+      var properties = defaultAnnotationProperties(for: tool)
+      properties.strokeColor = color
+      if tool == .filledRectangle {
+        properties.fillColor = color
+      }
+      annotationToolProperties[tool] = properties
+    }
+
+    if selectedTool.supportsQuickPropertiesBar {
+      applyToolPropertiesToLegacyState(defaultAnnotationProperties(for: selectedTool), for: selectedTool)
+    } else {
+      strokeColor = color
+    }
+  }
+
   private func defaultAnnotationProperties(for tool: AnnotationToolType?) -> AnnotationProperties {
-    guard let tool else { return AnnotationProperties() }
+    guard let tool else {
+      var properties = AnnotationProperties(strokeColor: sharedAnnotationColor ?? .red)
+      applySharedParameterDefaults(to: &properties, for: nil)
+      return properties
+    }
     if let properties = annotationToolProperties[tool] {
       return properties
     }
 
-    guard tool == .watermark else { return AnnotationProperties() }
-    return AnnotationProperties(
-      strokeColor: .white,
+    return baseAnnotationProperties(for: tool)
+  }
+
+  private func baseAnnotationProperties(for tool: AnnotationToolType) -> AnnotationProperties {
+    if tool != .watermark {
+      var properties = AnnotationProperties(strokeColor: sharedAnnotationColor ?? .red)
+      applySharedParameterDefaults(to: &properties, for: tool)
+      if tool == .filledRectangle {
+        properties.fillColor = properties.strokeColor
+      }
+      return properties
+    }
+
+    let strokeColor = sharedAnnotationColor ?? Color.white
+    var properties = AnnotationProperties(
+      strokeColor: strokeColor,
       fillColor: .clear,
       strokeWidth: 3,
       cornerRadius: 0,
@@ -2466,12 +2652,45 @@ final class AnnotateState: ObservableObject {
       rotationDegrees: WatermarkStyle.diagonal.defaultRotationDegrees,
       watermarkStyle: .diagonal
     )
+    applySharedParameterDefaults(to: &properties, for: tool)
+    return properties
+  }
+
+  private func applySharedParameterDefaults(
+    to properties: inout AnnotationProperties,
+    for tool: AnnotationToolType?
+  ) {
+    let defaults = sharedAnnotationParameterDefaults
+
+    if tool == nil || tool?.supportsQuickStrokeWidth == true,
+       let strokeWidth = defaults.strokeWidth {
+      properties.strokeWidth = strokeWidth
+    }
+
+    if tool == nil || tool?.supportsQuickCornerRadius == true,
+       let cornerRadius = defaults.cornerRadius {
+      properties.cornerRadius = cornerRadius
+    }
+
+    if tool == nil || tool == .text || tool == .watermark,
+       let fontSize = defaults.fontSize {
+      properties.fontSize = fontSize
+    }
+
+    if tool == nil || tool == .watermark {
+      if let watermarkOpacity = defaults.watermarkOpacity {
+        properties.opacity = watermarkOpacity
+      }
+      if let watermarkRotationDegrees = defaults.watermarkRotationDegrees {
+        properties.rotationDegrees = watermarkRotationDegrees
+      }
+    }
   }
 
   func annotationCreationProperties(for tool: AnnotationToolType) -> AnnotationProperties {
     var properties = defaultAnnotationProperties(for: tool)
-    if tool == .filledRectangle && properties.fillColor == .clear {
-      properties.fillColor = properties.strokeColor.opacity(1)
+    if tool == .filledRectangle {
+      properties.fillColor = properties.strokeColor
     }
     return properties
   }
@@ -2493,11 +2712,17 @@ final class AnnotateState: ObservableObject {
     if let strokeWidth = strokeWidth {
       properties.strokeWidth = AnnotationProperties.clampedControlValue(strokeWidth)
     }
-    if let strokeColor = strokeColor {
-      properties.strokeColor = strokeColor
-    }
-    if let fillColor = fillColor {
-      properties.fillColor = fillColor
+    if tool == .filledRectangle,
+       let color = strokeColor ?? fillColor {
+      properties.strokeColor = color
+      properties.fillColor = color
+    } else {
+      if let strokeColor = strokeColor {
+        properties.strokeColor = strokeColor
+      }
+      if let fillColor = fillColor {
+        properties.fillColor = fillColor
+      }
     }
     if let cornerRadius = cornerRadius {
       properties.cornerRadius = max(0, cornerRadius)
@@ -2729,9 +2954,7 @@ final class AnnotateState: ObservableObject {
             }
           }
         ) {
-          if let tool = self.quickPropertiesTool {
-            self.updateDefaultAnnotationProperties(for: tool, fontSize: clampedSize)
-          }
+          self.rememberSharedAnnotationFontSize(clampedSize)
         }
       }
     )
@@ -2870,7 +3093,7 @@ final class AnnotateState: ObservableObject {
             return false
           }
         ) {
-          self.updateDefaultAnnotationProperties(for: .watermark, opacity: clampedOpacity)
+          self.rememberSharedWatermarkOpacity(clampedOpacity)
         }
       }
     )
@@ -2897,7 +3120,7 @@ final class AnnotateState: ObservableObject {
             return false
           }
         ) {
-          self.updateDefaultAnnotationProperties(for: .watermark, rotationDegrees: clampedRotation)
+          self.rememberSharedWatermarkRotation(clampedRotation)
         }
       }
     )
@@ -3074,16 +3297,14 @@ final class AnnotateState: ObservableObject {
       },
       set: { [weak self] newColor in
         guard let self else { return }
-        if !self.updateQuickSelectionProperties(
+        let didUpdateSelection = self.updateQuickSelectionProperties(
           strokeColor: newColor,
           recordsUndo: true,
           matching: { $0.supportsQuickStrokeColor }
-        ) {
-          if let tool = self.quickPropertiesTool {
-            self.updateDefaultAnnotationProperties(for: tool, strokeColor: newColor)
-          } else {
-            self.strokeColor = newColor
-          }
+        )
+        self.rememberSharedAnnotationColor(newColor)
+        if !didUpdateSelection, self.quickPropertiesTool == nil {
+          self.strokeColor = newColor
         }
       }
     )
@@ -3127,11 +3348,7 @@ final class AnnotateState: ObservableObject {
           recordsUndo: true,
           matching: { $0.supportsQuickStrokeWidth }
         ) {
-          if let tool = self.quickPropertiesTool {
-            self.updateDefaultAnnotationProperties(for: tool, strokeWidth: newWidth)
-          } else {
-            self.strokeWidth = newWidth
-          }
+          self.rememberSharedAnnotationStrokeWidth(newWidth)
         }
       }
     )
@@ -3152,11 +3369,7 @@ final class AnnotateState: ObservableObject {
           recordsUndo: true,
           matching: { $0.toolType.supportsQuickCornerRadius }
         ) {
-          if let tool = self.quickPropertiesTool {
-            self.updateDefaultAnnotationProperties(for: tool, cornerRadius: clampedRadius)
-          } else {
-            self.rectangleCornerRadius = clampedRadius
-          }
+          self.rememberSharedAnnotationCornerRadius(clampedRadius)
         }
       }
     )

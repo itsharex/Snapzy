@@ -26,7 +26,7 @@ enum PreferencesKeys {
   static let wallpaperDirectoryBookmark = "wallpaper.directoryBookmark"
   static let customWallpaperBookmarks = "wallpaper.customBookmarks"
 
-  // Appearance
+  /// Appearance
   static let appearanceMode = "appearanceMode"
 
   // Shortcuts
@@ -50,6 +50,10 @@ enum PreferencesKeys {
   static let backgroundCutoutAutoCropEnabled = "backgroundCutout.autoCropEnabled"
   static let annotateCanvasPresets = "annotate.canvasPresets.v1"
   static let annotateDefaultCanvasPresetId = "annotate.defaultCanvasPresetId.v1"
+  static let annotatePrimaryColor = "annotate.primaryColor.v1"
+  static let annotateParameterDefaults = "annotate.parameterDefaults.v1"
+  static let annotateCustomColors = "annotate.customColors.v1"
+  static let annotateFavoriteColors = "annotate.favoriteColors.v1"
   static let ocrSuccessNotificationEnabled = "ocr.successNotificationEnabled"
 
   // Floating Screenshot (Quick Access)

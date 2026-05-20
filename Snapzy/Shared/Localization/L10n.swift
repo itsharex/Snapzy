@@ -694,6 +694,16 @@ enum L10n {
       defaultValue: "Original",
       comment: "Generic original option label"
     )
+    static let favorite = string(
+      "common.favorite",
+      defaultValue: "Favorite",
+      comment: "Generic favorite section title"
+    )
+    static let dragColorsHere = string(
+      "common.drag-colors-here",
+      defaultValue: "Drag colors here",
+      comment: "Instruction shown in color favorite drop zones"
+    )
     static let custom = string(
       "common.custom",
       defaultValue: "Custom",

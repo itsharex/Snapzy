@@ -251,6 +251,8 @@ struct AnnotateQuickPropertiesBar: View {
           title: colorTitle,
           selectedColor: state.quickStrokeColorBinding,
           colors: strokeColors,
+          role: .annotationStroke,
+          quickColorLimit: density == .regular ? 4 : 2,
           groupSpacing: density.groupSpacing
         )
       }
@@ -265,6 +267,8 @@ struct AnnotateQuickPropertiesBar: View {
           title: L10n.Common.fill,
           selectedColor: state.quickFillColorBinding,
           colors: fillColors,
+          role: .annotationFill,
+          quickColorLimit: density == .regular ? 4 : 2,
           groupSpacing: density.groupSpacing
         )
       }
@@ -279,6 +283,8 @@ struct AnnotateQuickPropertiesBar: View {
           title: L10n.Common.background,
           selectedColor: state.quickTextBackgroundBinding,
           colors: textBackgroundColors,
+          role: .textBackground,
+          quickColorLimit: density == .regular ? 3 : 1,
           groupSpacing: density.groupSpacing
         )
       }
@@ -616,44 +622,66 @@ private struct QuickPropertiesColorPopoverControl: View {
   let title: String
   @Binding var selectedColor: Color
   let colors: [Color]
+  let role: AnnotateColorPaletteRole
+  let quickColorLimit: Int
   let groupSpacing: CGFloat
 
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
   @State private var showsPopover = false
 
   var body: some View {
     QuickPropertiesGroup(title: title, spacing: groupSpacing) {
-      Button {
-        showsPopover.toggle()
-      } label: {
-        HStack(spacing: 5) {
-          QuickPropertiesColorSwatch(
-            color: selectedColor,
-            isSelected: false,
-            size: 16
+      HStack(spacing: 5) {
+        Button {
+          showsPopover.toggle()
+        } label: {
+          HStack(spacing: 5) {
+            QuickPropertiesColorSwatch(
+              color: selectedColor,
+              isSelected: false,
+              size: 16
+            )
+            Image(systemName: "chevron.down")
+              .font(.system(size: 8, weight: .bold))
+              .foregroundColor(.secondary)
+          }
+          .frame(width: 42, height: 26)
+          .background(
+            RoundedRectangle(cornerRadius: 7)
+              .fill(SidebarColors.itemDefault)
           )
-          Image(systemName: "chevron.down")
-            .font(.system(size: 8, weight: .bold))
-            .foregroundColor(.secondary)
+          .overlay(
+            RoundedRectangle(cornerRadius: 7)
+              .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
+          )
         }
-        .frame(width: 42, height: 26)
-        .background(
-          RoundedRectangle(cornerRadius: 7)
-            .fill(SidebarColors.itemDefault)
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 7)
-            .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
-        )
-      }
-      .buttonStyle(.plain)
-      .help(title)
-      .popover(isPresented: $showsPopover, arrowEdge: .bottom) {
-        QuickPropertiesColorPopover(
-          title: title,
-          selectedColor: $selectedColor,
-          colors: colors
-        ) {
-          showsPopover = false
+        .buttonStyle(.plain)
+        .help(title)
+        .popover(isPresented: $showsPopover, arrowEdge: .bottom) {
+          QuickPropertiesColorPopover(
+            title: title,
+            selectedColor: $selectedColor,
+            colors: colors,
+            role: role
+          ) {
+            showsPopover = false
+          }
+        }
+
+        ForEach(Array(paletteStore.favoriteColors(for: role).prefix(quickColorLimit)), id: \.self) { color in
+          Button {
+            selectedColor = color
+          } label: {
+            QuickPropertiesColorSwatch(
+              color: color,
+              isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+              size: 16
+            )
+            .frame(width: 22, height: 26)
+          }
+          .buttonStyle(.plain)
+          .help(L10n.Common.favorite)
+          .annotateColorDraggable(color, sourceFavoriteRole: role)
         }
       }
     }
@@ -664,7 +692,13 @@ private struct QuickPropertiesColorPopover: View {
   let title: String
   @Binding var selectedColor: Color
   let colors: [Color]
+  let role: AnnotateColorPaletteRole
   let dismiss: () -> Void
+
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
+  @State private var draftCustomColor = Color.red
+  @State private var showsCustomColorPicker = false
+  @State private var originalSelectedColor: Color?
 
   private let columns = Array(
     repeating: GridItem(.fixed(24), spacing: 8),
@@ -678,30 +712,332 @@ private struct QuickPropertiesColorPopover: View {
         .foregroundColor(SidebarColors.labelSecondary)
         .lineLimit(1)
 
+      let favoriteColors = paletteStore.favoriteColors(for: role)
+      if !favoriteColors.isEmpty {
+        Text(L10n.Common.favorite)
+          .font(Typography.labelSmall)
+          .foregroundColor(SidebarColors.labelSecondary)
+
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+          ForEach(favoriteColors, id: \.self) { color in
+            favoriteColorButton(color)
+          }
+
+          QuickPropertiesFavoriteDropSlot { payload in
+            handleFavoriteDrop(payload)
+          }
+        }
+      } else {
+        Text(L10n.Common.favorite)
+          .font(Typography.labelSmall)
+          .foregroundColor(SidebarColors.labelSecondary)
+
+        QuickPropertiesFavoriteEmptyDropTarget { payload in
+          handleFavoriteDrop(payload)
+        }
+      }
+
+      Divider()
+
+      Text(L10n.Common.colors)
+        .font(Typography.labelSmall)
+        .foregroundColor(SidebarColors.labelSecondary)
+
       LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-        colorButtons
+        ForEach(colors, id: \.self) { color in
+          paletteColorButton(color, overlayAction: nil, overlayHelp: "")
+        }
+
+        ForEach(paletteStore.customColors, id: \.self) { color in
+          paletteColorButton(
+            color,
+            overlayAction: {
+              paletteStore.removeColor(color)
+            },
+            overlayHelp: L10n.Common.deleteAction
+          )
+        }
+
+        if showsCustomColorPicker {
+          draftCustomColorButton
+        }
+
+        if !showsCustomColorPicker {
+          Button {
+            beginCustomColorDraft()
+          } label: {
+            AnnotateAddColorSwatch(size: 22)
+          }
+          .buttonStyle(.plain)
+          .help(L10n.Common.custom)
+          .accessibilityLabel(L10n.Common.custom)
+        }
+      }
+
+      if showsCustomColorPicker {
+        AnnotateCustomColorPickerPanel(
+          selectedColor: $selectedColor,
+          draftColor: $draftCustomColor,
+          onCancel: cancelCustomColorDraft,
+          onApply: applyCustomColorDraft
+        )
+        .padding(.top, 2)
       }
     }
     .padding(12)
-    .frame(width: 184, alignment: .leading)
+    .frame(width: 196, alignment: .leading)
+    .onAppear {
+      syncDraftColor(with: selectedColor)
+    }
+    .onChange(of: selectedColor) { color in
+      syncDraftColor(with: color)
+    }
+    .onDisappear {
+      cancelCustomColorDraftIfNeeded()
+    }
   }
 
-  @ViewBuilder
-  private var colorButtons: some View {
-    ForEach(colors, id: \.self) { color in
-      Button {
-        selectedColor = color
-        dismiss()
-      } label: {
-        QuickPropertiesColorSwatch(
-          color: color,
-          isSelected: selectedColor == color,
-          size: 22
-        )
-      }
-      .buttonStyle(.plain)
-      .help(color == .clear ? L10n.Common.none : title)
+  private var draftCustomColorButton: some View {
+    QuickPropertiesColorSwatch(
+      color: draftCustomColor,
+      isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, draftCustomColor),
+      size: 22
+    )
+    .contentShape(Circle())
+    .onTapGesture {
+      selectedColor = draftCustomColor
     }
+    .frame(width: 24, height: 24)
+    .help(L10n.Common.custom)
+  }
+
+  private func favoriteColorButton(_ color: Color) -> some View {
+    QuickPropertiesPaletteColorButton(
+      color: color,
+      title: AnnotateColorPaletteStore.isClear(color) ? L10n.Common.none : title,
+      isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+      sourceFavoriteRole: role,
+      overlayAction: {
+        paletteStore.removeFavorite(color, for: role)
+      },
+      overlayHelp: L10n.Common.deleteAction,
+      onDropPayload: { payload in
+        handleFavoriteDrop(payload, targetColor: color)
+      },
+      onSelect: {
+        selectColorAndDismiss(color)
+      }
+    )
+  }
+
+  private func paletteColorButton(
+    _ color: Color,
+    overlayAction: (() -> Void)?,
+    overlayHelp: String
+  ) -> some View {
+    QuickPropertiesPaletteColorButton(
+      color: color,
+      title: AnnotateColorPaletteStore.isClear(color) ? L10n.Common.none : title,
+      isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+      sourceFavoriteRole: nil,
+      overlayAction: overlayAction,
+      overlayHelp: overlayHelp,
+      onSelect: {
+        selectColorAndDismiss(color)
+      }
+    )
+  }
+
+  private func handleFavoriteDrop(_ payload: AnnotateColorDragPayload) {
+    paletteStore.acceptFavoriteDrop(
+      payload,
+      for: role
+    )
+  }
+
+  private func handleFavoriteDrop(
+    _ payload: AnnotateColorDragPayload,
+    targetColor: Color
+  ) {
+    paletteStore.acceptFavoriteDrop(
+      payload,
+      for: role,
+      targetColor: targetColor
+    )
+  }
+
+  private func syncDraftColor(with color: Color) {
+    guard !AnnotateColorPaletteStore.isClear(color) else { return }
+    draftCustomColor = color
+  }
+
+  private func selectColorAndDismiss(_ color: Color) {
+    originalSelectedColor = nil
+    showsCustomColorPicker = false
+    selectedColor = color
+    dismiss()
+  }
+
+  private func beginCustomColorDraft() {
+    originalSelectedColor = selectedColor
+    syncDraftColor(with: selectedColor)
+    selectedColor = draftCustomColor
+    showsCustomColorPicker = true
+  }
+
+  private func applyCustomColorDraft() {
+    guard !AnnotateColorPaletteStore.isClear(draftCustomColor) else { return }
+    paletteStore.addColor(draftCustomColor)
+    selectedColor = draftCustomColor
+    originalSelectedColor = nil
+    showsCustomColorPicker = false
+  }
+
+  private func cancelCustomColorDraft() {
+    guard let originalSelectedColor else {
+      showsCustomColorPicker = false
+      return
+    }
+
+    selectedColor = originalSelectedColor
+    draftCustomColor = originalSelectedColor
+    self.originalSelectedColor = nil
+    showsCustomColorPicker = false
+  }
+
+  private func cancelCustomColorDraftIfNeeded() {
+    guard originalSelectedColor != nil else { return }
+    cancelCustomColorDraft()
+  }
+}
+
+private struct QuickPropertiesPaletteColorButton: View {
+  let color: Color
+  let title: String
+  let isSelected: Bool
+  let sourceFavoriteRole: AnnotateColorPaletteRole?
+  let overlayAction: (() -> Void)?
+  let overlayHelp: String
+  var onDropPayload: ((AnnotateColorDragPayload) -> Void)? = nil
+  let onSelect: () -> Void
+
+  var body: some View {
+    if let onDropPayload {
+      content
+        .onDrop(of: AnnotateColorDragPayload.supportedContentTypes, isTargeted: $isDropTargeted) { providers in
+          AnnotateColorDragPayload.load(from: providers) { payload in
+            guard let payload else { return }
+            onDropPayload(payload)
+          }
+        }
+    } else {
+      content
+    }
+  }
+
+  @State private var isDropTargeted = false
+
+  private var content: some View {
+    ZStack(alignment: .topTrailing) {
+      QuickPropertiesColorSwatch(
+        color: color,
+        isSelected: isSelected,
+        size: 22
+      )
+      .contentShape(Circle())
+      .onTapGesture(perform: onSelect)
+      .help(title)
+      .annotateColorDraggable(color, sourceFavoriteRole: sourceFavoriteRole)
+
+      if let overlayAction {
+        Button(action: overlayAction) {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(Color.white, Color.secondary.opacity(0.9))
+            .background(
+              Circle()
+                .fill(SidebarColors.itemDefault)
+                .frame(width: 8, height: 8)
+            )
+        }
+        .buttonStyle(.plain)
+        .offset(x: 5, y: -5)
+        .help(overlayHelp)
+      }
+
+      if isDropTargeted {
+        Circle()
+          .stroke(Color.accentColor.opacity(0.75), lineWidth: 2)
+          .frame(width: 28, height: 28)
+      }
+    }
+    .frame(width: 24, height: 24)
+  }
+}
+
+private struct QuickPropertiesFavoriteEmptyDropTarget: View {
+  let onDropPayload: (AnnotateColorDragPayload) -> Void
+
+  @State private var isTargeted = false
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: isTargeted ? "arrow.down" : "plus")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(isTargeted ? .accentColor : .secondary)
+        .frame(width: 24, height: 24)
+        .background(Circle().fill(isTargeted ? Color.accentColor.opacity(0.1) : SidebarColors.itemDefault.opacity(0.55)))
+        .overlay(
+          Circle()
+            .stroke(
+              isTargeted ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.35),
+              style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+            )
+        )
+
+      Text(L10n.Common.dragColorsHere)
+        .font(Typography.labelSmall)
+        .lineLimit(1)
+    }
+    .foregroundColor(isTargeted ? .accentColor : SidebarColors.labelSecondary)
+    .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+    .contentShape(Rectangle())
+    .onDrop(of: AnnotateColorDragPayload.supportedContentTypes, isTargeted: $isTargeted) { providers in
+      AnnotateColorDragPayload.load(from: providers) { payload in
+        guard let payload else { return }
+        onDropPayload(payload)
+      }
+    }
+  }
+}
+
+private struct QuickPropertiesFavoriteDropSlot: View {
+  let onDropPayload: (AnnotateColorDragPayload) -> Void
+
+  @State private var isTargeted = false
+
+  var body: some View {
+    Image(systemName: isTargeted ? "arrow.down" : "plus")
+      .font(.system(size: 9, weight: .semibold))
+      .foregroundColor(isTargeted ? .accentColor : .secondary)
+      .frame(width: 22, height: 22)
+      .background(Circle().fill(SidebarColors.itemDefault.opacity(0.55)))
+      .overlay(
+        Circle()
+          .stroke(
+            isTargeted ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.35),
+            style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+          )
+      )
+      .frame(width: 24, height: 24)
+      .help(L10n.Common.dragColorsHere)
+      .onDrop(of: AnnotateColorDragPayload.supportedContentTypes, isTargeted: $isTargeted) { providers in
+        AnnotateColorDragPayload.load(from: providers) { payload in
+          guard let payload else { return }
+          onDropPayload(payload)
+        }
+      }
   }
 }
 
@@ -713,7 +1049,7 @@ private struct QuickPropertiesColorSwatch: View {
   var body: some View {
     ZStack {
       Circle()
-        .fill(color == .clear ? Color.clear : color)
+        .fill(AnnotateColorPaletteStore.isClear(color) ? Color.clear : color)
         .frame(width: size, height: size)
         .overlay(
           Circle()
@@ -723,7 +1059,7 @@ private struct QuickPropertiesColorSwatch: View {
             )
         )
 
-      if color == .clear {
+      if AnnotateColorPaletteStore.isClear(color) {
         Circle()
           .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
           .frame(width: size, height: size)
@@ -742,7 +1078,7 @@ private struct QuickPropertiesGroup<Content: View>: View {
 
   init(title: String, @ViewBuilder content: () -> Content) {
     self.title = title
-    self.spacing = Spacing.sm
+    spacing = Spacing.sm
     self.content = content()
   }
 
@@ -829,7 +1165,7 @@ private struct QuickTextFontSizeControl: View {
           .font(.system(size: 10))
           .foregroundColor(.secondary)
 
-        Slider(value: $value, in: 12...72, step: 1)
+        Slider(value: $value, in: 12 ... 72, step: 1)
           .frame(width: sliderWidth)
           .controlSize(.small)
 
@@ -917,7 +1253,7 @@ private struct QuickWatermarkOpacityControl: View {
           .font(.system(size: 10))
           .foregroundColor(.secondary)
 
-        Slider(value: $value, in: 0.05...0.65, step: 0.01)
+        Slider(value: $value, in: 0.05 ... 0.65, step: 0.01)
           .frame(width: sliderWidth)
           .controlSize(.small)
 
@@ -944,7 +1280,7 @@ private struct QuickWatermarkRotationControl: View {
           .font(.system(size: 10))
           .foregroundColor(.secondary)
 
-        Slider(value: $value, in: -45...45, step: 1)
+        Slider(value: $value, in: -45 ... 45, step: 1)
           .frame(width: sliderWidth)
           .controlSize(.small)
 
@@ -971,7 +1307,7 @@ private struct QuickCornerRadiusControl: View {
           .font(.system(size: 10))
           .foregroundColor(.secondary)
 
-        Slider(value: $value, in: 0...60, step: 1)
+        Slider(value: $value, in: 0 ... 60, step: 1)
           .frame(width: sliderWidth)
           .controlSize(.small)
 

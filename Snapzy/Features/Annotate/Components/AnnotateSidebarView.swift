@@ -62,7 +62,7 @@ struct AnnotateSidebarView: View, Equatable {
   static func == (lhs: AnnotateSidebarView, rhs: AnnotateSidebarView) -> Bool {
     lhs.snapshot == rhs.snapshot
   }
-  
+
   var body: some View {
     ScrollView(.vertical, showsIndicators: true) {
       VStack(alignment: .leading, spacing: Spacing.md) {
@@ -104,7 +104,7 @@ struct AnnotateSidebarView: View, Equatable {
     .frame(maxHeight: .infinity)
 //    .background(Color(nsColor: .scrubberTexturedBackground))
   }
-  
+
   // MARK: - Preset Controls
 
   private var presetControlsSection: some View {
@@ -418,9 +418,9 @@ struct AnnotateSidebarView: View, Equatable {
     alert.addButton(withTitle: L10n.Common.ok)
     alert.runModal()
   }
-  
+
   // MARK: - Sections
-  
+
   private var gradientSection: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
       SidebarSectionHeader(title: L10n.Common.gradients)
@@ -431,7 +431,6 @@ struct AnnotateSidebarView: View, Equatable {
             preset: preset,
             isSelected: state.backgroundStyle == .gradient(preset)
           ) {
-
             if state.padding <= 0 {
               state.padding = 24
             }
@@ -457,11 +456,11 @@ struct AnnotateSidebarView: View, Equatable {
       CompactColorSwatchGrid(selectedColor: colorBinding)
     }
   }
-  
+
   private var colorBinding: Binding<Color?> {
     Binding(
       get: {
-        if case .solidColor(let color) = state.backgroundStyle {
+        if case let .solidColor(color) = state.backgroundStyle {
           return color
         }
         return nil
@@ -473,7 +472,7 @@ struct AnnotateSidebarView: View, Equatable {
       }
     )
   }
-  
+
   private var slidersSection: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
       CompactSliderRow(
@@ -483,12 +482,12 @@ struct AnnotateSidebarView: View, Equatable {
           set: { newValue in
             state.padding = newValue
             // Auto-apply white background when padding increases from 0
-            if newValue > 0 && state.backgroundStyle == .none {
+            if newValue > 0, state.backgroundStyle == .none {
               state.backgroundStyle = .solidColor(.white)
             }
           }
         ),
-        range: 0...300,
+        range: 0 ... 300,
         onDragging: { isDragging, value in
           state.previewPadding = isDragging ? value : nil
         }
@@ -499,7 +498,7 @@ struct AnnotateSidebarView: View, Equatable {
           get: { state.shadowIntensity },
           set: { state.shadowIntensity = $0 }
         ),
-        range: 0...1,
+        range: 0 ... 1,
         onDragging: { isDragging, value in
           state.previewShadowIntensity = isDragging ? value : nil
         }
@@ -510,14 +509,14 @@ struct AnnotateSidebarView: View, Equatable {
           get: { state.cornerRadius },
           set: { state.cornerRadius = $0 }
         ),
-        range: 0...60,
+        range: 0 ... 60,
         onDragging: { isDragging, value in
           state.previewCornerRadius = isDragging ? value : nil
         }
       )
     }
   }
-  
+
   private var alignmentSection: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
       SidebarSectionHeader(title: L10n.AnnotateUI.alignment)
@@ -529,7 +528,7 @@ struct AnnotateSidebarView: View, Equatable {
         print("DEBUG [Alignment]: Current padding = \(state.padding), backgroundStyle = \(state.backgroundStyle)")
 
         // Auto-apply padding when alignment changes from center
-        if state.padding < 24 && newAlignment != .center {
+        if state.padding < 24, newAlignment != .center {
           state.padding = 24
           print("DEBUG [Alignment]: Set padding to 24")
           // Also apply background if none
@@ -543,7 +542,7 @@ struct AnnotateSidebarView: View, Equatable {
       })
     }
   }
-  
+
   private var ratioSection: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
       HStack(spacing: Spacing.sm) {
@@ -636,24 +635,57 @@ struct AspectRatioOptionButton: View {
 
 struct CompactColorSwatchGrid: View {
   @Binding var selectedColor: Color?
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
+  @State private var draftCustomColor = Color.red
 
   private let colors: [Color] = [
-    .red, .orange, .yellow, .green, .blue, .purple, .pink, .gray, .white, .black
+    .red, .orange, .yellow, .green, .blue, .purple, .pink, .gray, .white, .black,
   ]
 
   var body: some View {
-    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: GridConfig.gap), count: GridConfig.colorColumns), spacing: GridConfig.gap) {
-      ForEach(colors, id: \.self) { color in
-        Button {
-          selectedColor = color
-        } label: {
-          Circle()
-            .fill(color)
-            .colorSwatchStyle(isSelected: selectedColor == color)
+    VStack(alignment: .leading, spacing: Spacing.sm) {
+      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: GridConfig.gap), count: GridConfig.colorColumns), spacing: GridConfig.gap) {
+        ForEach(colors, id: \.self) { color in
+          Button {
+            selectedColor = color
+          } label: {
+            Circle()
+              .fill(color)
+              .colorSwatchStyle(isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color))
+          }
+          .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+
+        ForEach(paletteStore.customColors, id: \.self) { color in
+          AnnotateColorSwatchButton(
+            color: color,
+            isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+            size: Size.colorSwatchSmall,
+            onDelete: {
+              paletteStore.removeColor(color)
+            }
+          ) {
+            selectedColor = color
+          }
+        }
+
+        AnnotateCustomColorPickerControl(
+          selectedColor: customColorBinding,
+          draftColor: $draftCustomColor,
+          swatchSize: Size.colorSwatchSmall
+        )
       }
     }
+  }
+
+  private var customColorBinding: Binding<Color> {
+    Binding(
+      get: { selectedColor ?? draftCustomColor },
+      set: { color in
+        draftCustomColor = color
+        selectedColor = color
+      }
+    )
   }
 }
 

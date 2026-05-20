@@ -124,7 +124,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
   }
 
   var supportsQuickFillColor: Bool {
-    self == .filledRectangle
+    false
   }
 
   var supportsQuickStrokeWidth: Bool {

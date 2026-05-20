@@ -1,5 +1,5 @@
 //
-//  TextStylingSection.swift
+//  AnnotateTextStylingSection.swift
 //  Snapzy
 //
 //  Sidebar section for text annotation styling controls
@@ -10,6 +10,10 @@ import SwiftUI
 /// Sidebar section for styling text annotations
 struct TextStylingSection: View {
   @ObservedObject var state: AnnotateState
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
+  @State private var draftBackgroundColor = Color.white
+
+  private let backgroundColumns = Array(repeating: GridItem(.fixed(24), spacing: 4), count: 8)
 
   var body: some View {
     if let annotation = state.selectedTextAnnotation {
@@ -43,7 +47,7 @@ struct TextStylingSection: View {
           get: { annotation.properties.fontSize },
           set: { state.updateAnnotationProperties(id: annotation.id, fontSize: $0, recordsUndo: true) }
         ),
-        in: 12...72,
+        in: 12 ... 72,
         step: 1
       )
       .controlSize(.small)
@@ -58,7 +62,7 @@ struct TextStylingSection: View {
         .font(.system(size: 10))
         .foregroundColor(.secondary)
 
-      HStack(spacing: 4) {
+      LazyVGrid(columns: backgroundColumns, alignment: .leading, spacing: 4) {
         // None/transparent button
         Button {
           state.updateAnnotationProperties(id: annotation.id, fillColor: .clear, recordsUndo: true)
@@ -69,7 +73,7 @@ struct TextStylingSection: View {
             .frame(width: 36, height: 24)
             .background(
               RoundedRectangle(cornerRadius: 4)
-                .fill(annotation.properties.fillColor == .clear ? Color.blue.opacity(0.3) : Color.primary.opacity(0.1))
+                .fill(AnnotateColorPaletteStore.isClear(annotation.properties.fillColor) ? Color.blue.opacity(0.3) : Color.primary.opacity(0.1))
             )
         }
         .buttonStyle(.plain)
@@ -92,6 +96,25 @@ struct TextStylingSection: View {
           }
           .buttonStyle(.plain)
         }
+
+        ForEach(paletteStore.customColors, id: \.self) { color in
+          AnnotateColorSwatchButton(
+            color: color,
+            isSelected: AnnotateColorPaletteStore.colorsMatch(annotation.properties.fillColor, color),
+            size: 24,
+            onDelete: {
+              paletteStore.removeColor(color)
+            }
+          ) {
+            state.updateAnnotationProperties(id: annotation.id, fillColor: color, recordsUndo: true)
+          }
+        }
+
+        AnnotateCustomColorPickerControl(
+          selectedColor: backgroundColorBinding(for: annotation),
+          draftColor: $draftBackgroundColor,
+          swatchSize: 24
+        )
       }
     }
   }
@@ -102,10 +125,19 @@ struct TextStylingSection: View {
     [.white, .black, .yellow, .blue]
   }
 
+  private func backgroundColorBinding(for annotation: AnnotationItem) -> Binding<Color> {
+    Binding(
+      get: { annotation.properties.fillColor },
+      set: { color in
+        state.updateAnnotationProperties(id: annotation.id, fillColor: color, recordsUndo: true)
+      }
+    )
+  }
+
   /// Compare colors for UI selection state
   /// - Note: Uses SwiftUI Color equality which may have precision limits across color spaces
   ///   (e.g., sRGB vs Display P3). This is acceptable for UI selection purposes.
   private func colorsMatch(_ a: Color, _ b: Color) -> Bool {
-    return a == b
+    AnnotateColorPaletteStore.colorsMatch(a, b)
   }
 }

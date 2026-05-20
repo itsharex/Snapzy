@@ -1,5 +1,5 @@
 //
-//  AnnotationPropertiesSection.swift
+//  AnnotateAnnotationPropertiesSection.swift
 //  Snapzy
 //
 //  Sidebar section for editing selected annotation properties
@@ -45,7 +45,7 @@ struct AnnotationPropertiesSection: View {
   private var supportsFillColor: Bool {
     guard let ann = annotation else { return false }
     switch ann.type {
-    case .rectangle, .filledRectangle, .oval: return true
+    case .rectangle, .oval: return true
     default: return false
     }
   }
@@ -69,7 +69,7 @@ struct AnnotationPropertiesSection: View {
     CompactSliderRow(
       label: L10n.Common.stroke,
       value: strokeWidthBinding,
-      range: 1...20
+      range: 1 ... 20
     )
   }
 
@@ -93,7 +93,7 @@ struct AnnotationPropertiesSection: View {
       get: { annotation?.properties.strokeColor ?? .red },
       set: { newColor in
         guard let id = state.selectedAnnotationId else { return }
-        state.updateAnnotationProperties(id: id, strokeColor: newColor, recordsUndo: true)
+        state.updateAnnotationPrimaryColor(id: id, color: newColor, recordsUndo: true)
       }
     )
   }
@@ -125,22 +125,48 @@ struct ColorPickerRow: View {
   @Binding var selectedColor: Color
   let colors: [Color]
 
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
+  @State private var draftCustomColor = Color.red
+
+  private let columns = Array(repeating: GridItem(.fixed(20), spacing: 4), count: 8)
+
   var body: some View {
-    HStack(spacing: 4) {
-      ForEach(colors, id: \.self) { color in
-        Button {
-          selectedColor = color
-        } label: {
-          colorSwatch(color)
+    VStack(alignment: .leading, spacing: 6) {
+      LazyVGrid(columns: columns, alignment: .leading, spacing: 4) {
+        ForEach(colors, id: \.self) { color in
+          Button {
+            selectedColor = color
+          } label: {
+            colorSwatch(color)
+          }
+          .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+
+        ForEach(paletteStore.customColors, id: \.self) { color in
+          AnnotateColorSwatchButton(
+            color: color,
+            isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+            size: 20,
+            onDelete: {
+              paletteStore.removeColor(color)
+            }
+          ) {
+            selectedColor = color
+          }
+        }
+
+        AnnotateCustomColorPickerControl(
+          selectedColor: $selectedColor,
+          draftColor: $draftCustomColor,
+          swatchSize: 20
+        )
       }
     }
   }
 
   private func colorSwatch(_ color: Color) -> some View {
     ZStack {
-      if color == .clear {
+      if AnnotateColorPaletteStore.isClear(color) {
         // Show "none" indicator for clear
         Circle()
           .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
@@ -155,8 +181,8 @@ struct ColorPickerRow: View {
           .overlay(
             Circle()
               .stroke(
-                selectedColor == color ? Color.accentColor : Color.secondary.opacity(0.5),
-                lineWidth: selectedColor == color ? 2 : 1
+                AnnotateColorPaletteStore.colorsMatch(selectedColor, color) ? Color.accentColor : Color.secondary.opacity(0.5),
+                lineWidth: AnnotateColorPaletteStore.colorsMatch(selectedColor, color) ? 2 : 1
               )
           )
       }

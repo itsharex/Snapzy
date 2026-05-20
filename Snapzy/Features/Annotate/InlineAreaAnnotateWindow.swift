@@ -97,7 +97,7 @@ final class InlineAreaAnnotatePanel: NSPanel {
   private var didNotifyClose = false
 
   init(display: InlineAreaAnnotateDisplay, session: InlineAreaAnnotateSession) {
-    self.displayID = display.displayID
+    displayID = display.displayID
     self.session = session
     super.init(
       contentRect: display.screenFrame,
@@ -125,8 +125,13 @@ final class InlineAreaAnnotatePanel: NSPanel {
     ))
   }
 
-  override var canBecomeKey: Bool { true }
-  override var canBecomeMain: Bool { false }
+  override var canBecomeKey: Bool {
+    true
+  }
+
+  override var canBecomeMain: Bool {
+    false
+  }
 
   override func keyDown(with event: NSEvent) {
     if session.handleKeyEvent(event) { return }
@@ -157,11 +162,11 @@ private final class InlineAreaHostingView: NSHostingView<AnyView> {
   }
 
   @available(*, unavailable)
-  required init?(coder: NSCoder) {
+  required init?(coder _: NSCoder) {
     fatalError("init(coder:) has not been implemented")
   }
 
-  override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+  override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
     true
   }
 }
@@ -220,7 +225,7 @@ private struct InlineAreaAnnotateRootView: View {
       .coordinateSpace(name: InlineAreaCoordinateSpace.root)
       .onContinuousHover(coordinateSpace: .named(InlineAreaCoordinateSpace.root)) { phase in
         switch phase {
-        case .active(let location):
+        case let .active(location):
           cursorIndicatorPoint = location
           updateNativeCursorForIndicator(showsCursorIndicator)
         case .ended:
@@ -355,13 +360,13 @@ private struct InlineAreaAnnotateRootView: View {
         propertiesContentWidth = roundedWidth
       }
     )
-      .frame(width: placement.propertiesWidth, height: InlineAreaLayout.propertiesHeight)
-      .opacity(session.state.showsQuickPropertiesBar ? 1 : 0)
-      .allowsHitTesting(session.state.showsQuickPropertiesBar)
-      .position(placement.propertiesCenter)
-      .transaction { transaction in
-        transaction.animation = nil
-      }
+    .frame(width: placement.propertiesWidth, height: InlineAreaLayout.propertiesHeight)
+    .opacity(session.state.showsQuickPropertiesBar ? 1 : 0)
+    .allowsHitTesting(session.state.showsQuickPropertiesBar)
+    .position(placement.propertiesCenter)
+    .transaction { transaction in
+      transaction.animation = nil
+    }
 
     InlineAreaActionRail(session: session)
       .frame(width: InlineAreaLayout.actionRailWidth, height: InlineAreaLayout.actionRailHeight)
@@ -581,7 +586,7 @@ private enum InlineAreaNativeCursor {
     )
     if let rep {
       if let bitmapData = rep.bitmapData {
-        for offset in 0..<(rep.bytesPerRow * rep.pixelsHigh) {
+        for offset in 0 ..< (rep.bytesPerRow * rep.pixelsHigh) {
           bitmapData[offset] = 0
         }
       }
@@ -607,7 +612,6 @@ private struct InlineAreaSelectionGestureModifier<SelectionGesture: Gesture>: Vi
   let selectionGesture: SelectionGesture
   let isEnabled: Bool
 
-  @ViewBuilder
   func body(content: Content) -> some View {
     if isEnabled {
       content
@@ -677,10 +681,21 @@ struct InlineAreaControlInsets: Equatable {
     )
   }
 
-  var controlTopPadding: CGFloat { top + InlineAreaLayout.screenPadding }
-  var controlLeadingPadding: CGFloat { leading + InlineAreaLayout.screenPadding }
-  var controlBottomPadding: CGFloat { bottom + InlineAreaLayout.screenPadding }
-  var controlTrailingPadding: CGFloat { trailing + InlineAreaLayout.screenPadding }
+  var controlTopPadding: CGFloat {
+    top + InlineAreaLayout.screenPadding
+  }
+
+  var controlLeadingPadding: CGFloat {
+    leading + InlineAreaLayout.screenPadding
+  }
+
+  var controlBottomPadding: CGFloat {
+    bottom + InlineAreaLayout.screenPadding
+  }
+
+  var controlTrailingPadding: CGFloat {
+    trailing + InlineAreaLayout.screenPadding
+  }
 }
 
 enum InlineAreaVerticalSide {
@@ -698,7 +713,9 @@ private enum InlineAreaResizeHandle: CaseIterable, Identifiable {
   case bottomLeft
   case left
 
-  var id: Self { self }
+  var id: Self {
+    self
+  }
 
   var adjustsLeft: Bool {
     switch self {
@@ -1120,27 +1137,32 @@ enum InlineAreaControlGeometry {
     let belowSpace = spaceBelow(rect, containerSize: containerSize, controlInsets: controlInsets)
 
     if aboveSpace >= InlineAreaLayout.reservedControlHeight(showsProperties: true)
-        || belowSpace >= InlineAreaLayout.reservedControlHeight(showsProperties: true) {
+      || belowSpace >= InlineAreaLayout.reservedControlHeight(showsProperties: true)
+    {
       return nil
     }
 
     switch preferredSide {
     case .above:
       if aboveSpace >= InlineAreaLayout.toolbarHeight,
-         belowSpace >= InlineAreaLayout.propertiesHeight {
+         belowSpace >= InlineAreaLayout.propertiesHeight
+      {
         return (.above, .below)
       }
       if aboveSpace >= InlineAreaLayout.propertiesHeight,
-         belowSpace >= InlineAreaLayout.toolbarHeight {
+         belowSpace >= InlineAreaLayout.toolbarHeight
+      {
         return (.below, .above)
       }
     case .below:
       if belowSpace >= InlineAreaLayout.toolbarHeight,
-         aboveSpace >= InlineAreaLayout.propertiesHeight {
+         aboveSpace >= InlineAreaLayout.propertiesHeight
+      {
         return (.below, .above)
       }
       if belowSpace >= InlineAreaLayout.propertiesHeight,
-         aboveSpace >= InlineAreaLayout.toolbarHeight {
+         aboveSpace >= InlineAreaLayout.toolbarHeight
+      {
         return (.above, .below)
       }
     }
@@ -1172,7 +1194,7 @@ enum InlineAreaControlGeometry {
     let toolbarCenter = groupTop + InlineAreaLayout.toolbarHeight / 2
     let propertiesCenter = showsProperties
       ? groupTop + InlineAreaLayout.toolbarHeight + InlineAreaLayout.controlStackSpacing
-        + InlineAreaLayout.propertiesHeight / 2
+      + InlineAreaLayout.propertiesHeight / 2
       : toolbarCenter
 
     return (toolbarCenter, propertiesCenter)
@@ -1435,18 +1457,18 @@ private struct InlineAreaMoveHandle: View {
         .lineLimit(1)
         .minimumScaleFactor(0.85)
     }
-      .foregroundColor(InlineAreaChrome.secondaryText)
-      .frame(width: InlineAreaChrome.moveControlWidth, height: InlineAreaChrome.controlSize)
-      .background(
-        RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
-          .fill(isHovering ? InlineAreaChrome.itemHoverBackground : InlineAreaChrome.itemBackground)
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
-          .strokeBorder(InlineAreaChrome.itemBorder, lineWidth: 1)
-      )
-      .help(L10n.AnnotateUI.moveSelection)
-      .onHover { isHovering = $0 }
+    .foregroundColor(InlineAreaChrome.secondaryText)
+    .frame(width: InlineAreaChrome.moveControlWidth, height: InlineAreaChrome.controlSize)
+    .background(
+      RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
+        .fill(isHovering ? InlineAreaChrome.itemHoverBackground : InlineAreaChrome.itemBackground)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
+        .strokeBorder(InlineAreaChrome.itemBorder, lineWidth: 1)
+    )
+    .help(L10n.AnnotateUI.moveSelection)
+    .onHover { isHovering = $0 }
   }
 }
 
@@ -1521,6 +1543,7 @@ private struct InlineAreaPropertiesBar: View {
               title: colorTitle,
               selectedColor: state.quickStrokeColorBinding,
               colors: strokeColors,
+              role: .annotationStroke,
               popoverEdge: popoverEdge
             )
           }
@@ -1530,6 +1553,7 @@ private struct InlineAreaPropertiesBar: View {
               title: L10n.Common.fill,
               selectedColor: state.quickFillColorBinding,
               colors: fillColors,
+              role: .annotationFill,
               popoverEdge: popoverEdge
             )
           }
@@ -1539,6 +1563,7 @@ private struct InlineAreaPropertiesBar: View {
               title: L10n.Common.background,
               selectedColor: state.quickTextBackgroundBinding,
               colors: textBackgroundColors,
+              role: .textBackground,
               popoverEdge: popoverEdge
             )
           }
@@ -1591,7 +1616,7 @@ private struct InlineAreaPropertiesBar: View {
               title: L10n.Common.size,
               icon: "textformat.size",
               value: state.quickTextFontSizeBinding,
-              range: 12...72,
+              range: 12 ... 72,
               step: 1,
               displayText: "\(Int(state.quickTextFontSizeBinding.wrappedValue.rounded()))"
             )
@@ -1602,7 +1627,7 @@ private struct InlineAreaPropertiesBar: View {
               title: L10n.Common.corners,
               icon: "roundedbottom.horizontal",
               value: state.quickCornerRadiusBinding,
-              range: 0...60,
+              range: 0 ... 60,
               step: 1,
               displayText: "\(Int(state.quickCornerRadiusBinding.wrappedValue.rounded()))"
             )
@@ -1613,7 +1638,7 @@ private struct InlineAreaPropertiesBar: View {
               title: L10n.AnnotateUI.watermarkOpacity,
               icon: "circle.lefthalf.filled",
               value: state.quickWatermarkOpacityBinding,
-              range: 0.05...0.65,
+              range: 0.05 ... 0.65,
               step: 0.01,
               displayText: "\(Int((state.quickWatermarkOpacityBinding.wrappedValue * 100).rounded()))%"
             )
@@ -1622,7 +1647,7 @@ private struct InlineAreaPropertiesBar: View {
               title: L10n.Common.rotation,
               icon: "rotate.right",
               value: state.quickWatermarkRotationBinding,
-              range: -45...45,
+              range: -45 ... 45,
               step: 1,
               displayText: "\(Int(state.quickWatermarkRotationBinding.wrappedValue.rounded()))deg"
             )
@@ -1694,36 +1719,57 @@ private struct InlineAreaColorControl: View {
   let title: String
   @Binding var selectedColor: Color
   let colors: [Color]
+  let role: AnnotateColorPaletteRole
   let popoverEdge: Edge
 
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
   @State private var showsPopover = false
 
   var body: some View {
     InlineAreaPropertyGroup(title: title) {
-      Button {
-        showsPopover.toggle()
-      } label: {
-        HStack(spacing: 5) {
-          InlineAreaColorSwatch(color: selectedColor, isSelected: false, size: 15)
-          Image(systemName: "chevron.down")
-            .font(.system(size: 8, weight: .bold))
-            .foregroundColor(InlineAreaChrome.secondaryText)
+      HStack(spacing: 5) {
+        Button {
+          showsPopover.toggle()
+        } label: {
+          HStack(spacing: 5) {
+            InlineAreaColorSwatch(color: selectedColor, isSelected: false, size: 15)
+            Image(systemName: "chevron.down")
+              .font(.system(size: 8, weight: .bold))
+              .foregroundColor(InlineAreaChrome.secondaryText)
+          }
+          .frame(width: 40, height: InlineAreaChrome.propertyControlHeight)
+          .background(
+            RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
+              .fill(InlineAreaChrome.itemBackground)
+          )
         }
-        .frame(width: 40, height: InlineAreaChrome.propertyControlHeight)
-        .background(
-          RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
-            .fill(InlineAreaChrome.itemBackground)
-        )
-      }
-      .buttonStyle(.plain)
-      .help(title)
-      .popover(isPresented: $showsPopover, arrowEdge: popoverEdge) {
-        InlineAreaColorPopover(
-          title: title,
-          selectedColor: $selectedColor,
-          colors: colors
-        ) {
-          showsPopover = false
+        .buttonStyle(.plain)
+        .help(title)
+        .popover(isPresented: $showsPopover, arrowEdge: popoverEdge) {
+          InlineAreaColorPopover(
+            title: title,
+            selectedColor: $selectedColor,
+            colors: colors,
+            role: role
+          ) {
+            showsPopover = false
+          }
+        }
+
+        ForEach(Array(paletteStore.favoriteColors(for: role).prefix(3)), id: \.self) { color in
+          Button {
+            selectedColor = color
+          } label: {
+            InlineAreaColorSwatch(
+              color: color,
+              isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+              size: 15
+            )
+            .frame(width: 20, height: InlineAreaChrome.propertyControlHeight)
+          }
+          .buttonStyle(.plain)
+          .help(L10n.Common.favorite)
+          .annotateColorDraggable(color, sourceFavoriteRole: role)
         }
       }
     }
@@ -1734,7 +1780,13 @@ private struct InlineAreaColorPopover: View {
   let title: String
   @Binding var selectedColor: Color
   let colors: [Color]
+  let role: AnnotateColorPaletteRole
   let dismiss: () -> Void
+
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
+  @State private var draftCustomColor = Color.red
+  @State private var showsCustomColorPicker = false
+  @State private var originalSelectedColor: Color?
 
   private let columns = Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5)
 
@@ -1745,21 +1797,332 @@ private struct InlineAreaColorPopover: View {
         .foregroundColor(.secondary)
         .lineLimit(1)
 
+      let favoriteColors = paletteStore.favoriteColors(for: role)
+      if !favoriteColors.isEmpty {
+        Text(L10n.Common.favorite)
+          .font(Typography.labelSmall)
+          .foregroundColor(.secondary)
+
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+          ForEach(favoriteColors, id: \.self) { color in
+            favoriteColorButton(color)
+          }
+
+          InlineAreaFavoriteDropSlot { payload in
+            handleFavoriteDrop(payload)
+          }
+        }
+      } else {
+        Text(L10n.Common.favorite)
+          .font(Typography.labelSmall)
+          .foregroundColor(.secondary)
+
+        InlineAreaFavoriteEmptyDropTarget { payload in
+          handleFavoriteDrop(payload)
+        }
+      }
+
+      Divider()
+
+      Text(L10n.Common.colors)
+        .font(Typography.labelSmall)
+        .foregroundColor(.secondary)
+
       LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
         ForEach(colors, id: \.self) { color in
+          paletteColorButton(color, overlayAction: nil, overlayHelp: "")
+        }
+
+        ForEach(paletteStore.customColors, id: \.self) { color in
+          paletteColorButton(
+            color,
+            overlayAction: {
+              paletteStore.removeColor(color)
+            },
+            overlayHelp: L10n.Common.deleteAction
+          )
+        }
+
+        if showsCustomColorPicker {
+          draftCustomColorButton
+        }
+
+        if !showsCustomColorPicker {
           Button {
-            selectedColor = color
-            dismiss()
+            beginCustomColorDraft()
           } label: {
-            InlineAreaColorSwatch(color: color, isSelected: selectedColor == color, size: 22)
+            AnnotateAddColorSwatch(size: 22)
           }
           .buttonStyle(.plain)
-          .help(color == .clear ? L10n.Common.none : title)
+          .help(L10n.Common.custom)
+          .accessibilityLabel(L10n.Common.custom)
         }
+      }
+
+      if showsCustomColorPicker {
+        AnnotateCustomColorPickerPanel(
+          selectedColor: $selectedColor,
+          draftColor: $draftCustomColor,
+          onCancel: cancelCustomColorDraft,
+          onApply: applyCustomColorDraft
+        )
+        .padding(.top, 2)
       }
     }
     .padding(12)
-    .frame(width: 184, alignment: .leading)
+    .frame(width: 196, alignment: .leading)
+    .onAppear {
+      syncDraftColor(with: selectedColor)
+    }
+    .onChange(of: selectedColor) { color in
+      syncDraftColor(with: color)
+    }
+    .onDisappear {
+      cancelCustomColorDraftIfNeeded()
+    }
+  }
+
+  private var draftCustomColorButton: some View {
+    InlineAreaColorSwatch(
+      color: draftCustomColor,
+      isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, draftCustomColor),
+      size: 22
+    )
+    .contentShape(Circle())
+    .onTapGesture {
+      selectedColor = draftCustomColor
+    }
+    .frame(width: 24, height: 24)
+    .help(L10n.Common.custom)
+  }
+
+  private func syncDraftColor(with color: Color) {
+    guard !AnnotateColorPaletteStore.isClear(color) else { return }
+    draftCustomColor = color
+  }
+
+  private func selectColorAndDismiss(_ color: Color) {
+    originalSelectedColor = nil
+    showsCustomColorPicker = false
+    selectedColor = color
+    dismiss()
+  }
+
+  private func beginCustomColorDraft() {
+    originalSelectedColor = selectedColor
+    syncDraftColor(with: selectedColor)
+    selectedColor = draftCustomColor
+    showsCustomColorPicker = true
+  }
+
+  private func applyCustomColorDraft() {
+    guard !AnnotateColorPaletteStore.isClear(draftCustomColor) else { return }
+    paletteStore.addColor(draftCustomColor)
+    selectedColor = draftCustomColor
+    originalSelectedColor = nil
+    showsCustomColorPicker = false
+  }
+
+  private func cancelCustomColorDraft() {
+    guard let originalSelectedColor else {
+      showsCustomColorPicker = false
+      return
+    }
+
+    selectedColor = originalSelectedColor
+    draftCustomColor = originalSelectedColor
+    self.originalSelectedColor = nil
+    showsCustomColorPicker = false
+  }
+
+  private func cancelCustomColorDraftIfNeeded() {
+    guard originalSelectedColor != nil else { return }
+    cancelCustomColorDraft()
+  }
+
+  private func favoriteColorButton(_ color: Color) -> some View {
+    InlineAreaPaletteColorButton(
+      color: color,
+      title: AnnotateColorPaletteStore.isClear(color) ? L10n.Common.none : title,
+      isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+      sourceFavoriteRole: role,
+      overlayAction: {
+        paletteStore.removeFavorite(color, for: role)
+      },
+      overlayHelp: L10n.Common.deleteAction,
+      onDropPayload: { payload in
+        handleFavoriteDrop(payload, targetColor: color)
+      },
+      onSelect: {
+        selectColorAndDismiss(color)
+      }
+    )
+  }
+
+  private func paletteColorButton(
+    _ color: Color,
+    overlayAction: (() -> Void)?,
+    overlayHelp: String
+  ) -> some View {
+    InlineAreaPaletteColorButton(
+      color: color,
+      title: AnnotateColorPaletteStore.isClear(color) ? L10n.Common.none : title,
+      isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
+      sourceFavoriteRole: nil,
+      overlayAction: overlayAction,
+      overlayHelp: overlayHelp,
+      onSelect: {
+        selectColorAndDismiss(color)
+      }
+    )
+  }
+
+  private func handleFavoriteDrop(_ payload: AnnotateColorDragPayload) {
+    paletteStore.acceptFavoriteDrop(
+      payload,
+      for: role
+    )
+  }
+
+  private func handleFavoriteDrop(
+    _ payload: AnnotateColorDragPayload,
+    targetColor: Color
+  ) {
+    paletteStore.acceptFavoriteDrop(
+      payload,
+      for: role,
+      targetColor: targetColor
+    )
+  }
+}
+
+private struct InlineAreaPaletteColorButton: View {
+  let color: Color
+  let title: String
+  let isSelected: Bool
+  let sourceFavoriteRole: AnnotateColorPaletteRole?
+  let overlayAction: (() -> Void)?
+  let overlayHelp: String
+  var onDropPayload: ((AnnotateColorDragPayload) -> Void)? = nil
+  let onSelect: () -> Void
+
+  var body: some View {
+    if let onDropPayload {
+      content
+        .onDrop(of: AnnotateColorDragPayload.supportedContentTypes, isTargeted: $isDropTargeted) { providers in
+          AnnotateColorDragPayload.load(from: providers) { payload in
+            guard let payload else { return }
+            onDropPayload(payload)
+          }
+        }
+    } else {
+      content
+    }
+  }
+
+  @State private var isDropTargeted = false
+
+  private var content: some View {
+    ZStack(alignment: .topTrailing) {
+      InlineAreaColorSwatch(
+        color: color,
+        isSelected: isSelected,
+        size: 22
+      )
+      .contentShape(Circle())
+      .onTapGesture(perform: onSelect)
+      .help(title)
+      .annotateColorDraggable(color, sourceFavoriteRole: sourceFavoriteRole)
+
+      if let overlayAction {
+        Button(action: overlayAction) {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(Color.white, Color.secondary.opacity(0.9))
+            .background(
+              Circle()
+                .fill(InlineAreaChrome.itemBackground)
+                .frame(width: 8, height: 8)
+            )
+        }
+        .buttonStyle(.plain)
+        .offset(x: 5, y: -5)
+        .help(overlayHelp)
+      }
+
+      if isDropTargeted {
+        Circle()
+          .stroke(Color.accentColor.opacity(0.75), lineWidth: 2)
+          .frame(width: 28, height: 28)
+      }
+    }
+    .frame(width: 24, height: 24)
+  }
+}
+
+private struct InlineAreaFavoriteEmptyDropTarget: View {
+  let onDropPayload: (AnnotateColorDragPayload) -> Void
+
+  @State private var isTargeted = false
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: isTargeted ? "arrow.down" : "plus")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundColor(isTargeted ? .accentColor : .secondary)
+        .frame(width: 24, height: 24)
+        .background(Circle().fill(isTargeted ? Color.accentColor.opacity(0.1) : InlineAreaChrome.itemBackground.opacity(0.75)))
+        .overlay(
+          Circle()
+            .stroke(
+              isTargeted ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.35),
+              style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+            )
+        )
+
+      Text(L10n.Common.dragColorsHere)
+        .font(Typography.labelSmall)
+        .lineLimit(1)
+    }
+    .foregroundColor(isTargeted ? .accentColor : .secondary)
+    .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+    .contentShape(Rectangle())
+    .onDrop(of: AnnotateColorDragPayload.supportedContentTypes, isTargeted: $isTargeted) { providers in
+      AnnotateColorDragPayload.load(from: providers) { payload in
+        guard let payload else { return }
+        onDropPayload(payload)
+      }
+    }
+  }
+}
+
+private struct InlineAreaFavoriteDropSlot: View {
+  let onDropPayload: (AnnotateColorDragPayload) -> Void
+
+  @State private var isTargeted = false
+
+  var body: some View {
+    Image(systemName: isTargeted ? "arrow.down" : "plus")
+      .font(.system(size: 9, weight: .semibold))
+      .foregroundColor(isTargeted ? .accentColor : .secondary)
+      .frame(width: 22, height: 22)
+      .background(Circle().fill(InlineAreaChrome.itemBackground.opacity(0.75)))
+      .overlay(
+        Circle()
+          .stroke(
+            isTargeted ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.35),
+            style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+          )
+      )
+      .frame(width: 24, height: 24)
+      .help(L10n.Common.dragColorsHere)
+      .onDrop(of: AnnotateColorDragPayload.supportedContentTypes, isTargeted: $isTargeted) { providers in
+        AnnotateColorDragPayload.load(from: providers) { payload in
+          guard let payload else { return }
+          onDropPayload(payload)
+        }
+      }
   }
 }
 
@@ -1771,7 +2134,7 @@ private struct InlineAreaColorSwatch: View {
   var body: some View {
     ZStack {
       Circle()
-        .fill(color == .clear ? Color.clear : color)
+        .fill(AnnotateColorPaletteStore.isClear(color) ? Color.clear : color)
         .frame(width: size, height: size)
         .overlay(
           Circle()
@@ -1781,7 +2144,7 @@ private struct InlineAreaColorSwatch: View {
             )
         )
 
-      if color == .clear {
+      if AnnotateColorPaletteStore.isClear(color) {
         Image(systemName: "slash.circle")
           .font(.system(size: max(9, size * 0.5), weight: .semibold))
           .foregroundColor(InlineAreaChrome.secondaryText)
@@ -1878,12 +2241,7 @@ private struct InlineAreaTextFieldControl: View {
 
 private struct InlineAreaPropertyGroup<Content: View>: View {
   let title: String
-  let content: Content
-
-  init(title: String, @ViewBuilder content: () -> Content) {
-    self.title = title
-    self.content = content()
-  }
+  @ViewBuilder let content: Content
 
   var body: some View {
     HStack(spacing: 6) {
