@@ -19,7 +19,9 @@ final class HistoryThumbnailGeneratorTests: XCTestCase {
     testDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent("SnapzyTests_HistoryThumbs_\(UUID().uuidString)", isDirectory: true)
     try? FileManager.default.createDirectory(at: testDirectory, withIntermediateDirectories: true)
-    generator = HistoryThumbnailGenerator.shared
+    generator = HistoryThumbnailGenerator(
+      thumbnailsDirectory: testDirectory.appendingPathComponent("thumbnails", isDirectory: true)
+    )
     generator.clearAllThumbnails()
   }
 

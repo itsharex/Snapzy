@@ -15,6 +15,17 @@ final class ScreenshotPresetAutoApplier {
     fileAccess: SandboxFileAccessManager.shared
   )
 
+  private static let emptyCanvasPresetPayload = AnnotateCanvasPresetPayload(
+    backgroundStyle: CodableBackgroundStyle(from: .none)!,
+    isBlurredBackgroundEnabled: false,
+    blurredBackgroundEffect: .soft,
+    padding: 0,
+    shadowIntensity: 0.3,
+    cornerRadius: AnnotateCanvasDefaults.cornerRadius,
+    aspectRatio: .auto,
+    aspectRatioOrientation: .horizontal
+  )
+
   private let presetStore: AnnotateCanvasPresetStore
   private let fileAccess: SandboxFileAccessManager
 
@@ -69,15 +80,9 @@ final class ScreenshotPresetAutoApplier {
       return nil
     }
 
-    let state = AnnotateState(
-      image: sourceImage,
-      url: url,
-      canvasPresetStore: presetStore,
-      appliesDefaultCanvasPresetOnNewImages: false
-    )
-    state.applyCanvasPreset(preset, marksUnsaved: false)
+    let effects = Self.canvasEffects(from: preset.payload)
 
-    guard state.isDefaultCanvasPresetAutoApplied else {
+    guard Self.defaultPresetChangesCanvas(preset.payload) else {
       DiagnosticLogger.shared.log(
         .debug,
         .annotate,
@@ -87,7 +92,7 @@ final class ScreenshotPresetAutoApplier {
       return nil
     }
 
-    guard let renderedImage = AnnotateExporter.renderFinalImage(state: state),
+    guard let renderedImage = AnnotateExporter.renderCanvasEffects(sourceImage: sourceImage, effects: effects),
           let renderedData = AnnotateExporter.imageData(from: renderedImage, for: url.pathExtension) else {
       DiagnosticLogger.shared.log(
         .error,
@@ -122,10 +127,31 @@ final class ScreenshotPresetAutoApplier {
     return AnnotationSessionData(
       originalImageData: originalImageData,
       annotations: [],
-      canvasEffects: state.canvasEffectsSnapshot,
-      selectedCanvasPresetId: state.selectedCanvasPresetId,
-      isSelectedCanvasPresetDirty: state.isSelectedCanvasPresetDirty,
+      canvasEffects: effects,
+      selectedCanvasPresetId: preset.id,
+      isSelectedCanvasPresetDirty: false,
       cropRect: nil
+    )
+  }
+
+  private static func defaultPresetChangesCanvas(_ payload: AnnotateCanvasPresetPayload) -> Bool {
+    emptyCanvasPresetPayload.approximatelyEquals(payload) == false
+  }
+
+  private static func canvasEffects(from payload: AnnotateCanvasPresetPayload) -> AnnotationCanvasEffects {
+    let backgroundStyle = payload.backgroundStyle.toBackgroundStyle()
+    return AnnotationCanvasEffects(
+      backgroundStyle: backgroundStyle,
+      isBlurredBackgroundEnabled: payload.isBlurredBackgroundEnabled && backgroundStyle.supportsBlurredBackgroundEffect,
+      blurredBackgroundEffect: payload.blurredBackgroundEffect,
+      padding: payload.padding,
+      inset: 0,
+      autoBalance: true,
+      shadowIntensity: payload.shadowIntensity,
+      cornerRadius: payload.cornerRadius,
+      imageAlignment: .center,
+      aspectRatio: payload.aspectRatio,
+      aspectRatioOrientation: payload.aspectRatioOrientation
     )
   }
 }

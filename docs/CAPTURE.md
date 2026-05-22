@@ -380,6 +380,7 @@ flowchart TD
 - Persisted annotate sessions include the original image bytes, annotation items, canvas/background effects, crop state, cutout state/data, and embedded image assets. The final screenshot file remains the rendered user-facing image.
 - Session persistence happens after committed actions: save, save-and-close, copy/close with save, successful drag-to-app save, cloud upload/re-upload save, inline area annotate finish, and default-preset auto-apply during post-capture routing.
 - Canvas presets can be marked as the default for new full Annotate windows and include background style, blurred background effect, spacing, shadow, corner radius, aspect ratio, and ratio orientation. Session restore keeps the cached canvas effects, and inline area annotate does not auto-apply this window default.
+- Screenshot default-preset auto-apply uses the lightweight `AnnotateExporter.renderCanvasEffects(sourceImage:effects:)` path. It derives `AnnotationCanvasEffects` directly from the selected preset, renders the committed screenshot file, and returns editable session data without constructing a full `AnnotateState`.
 - Full Annotate sidebar background effects include gradients, wallpapers, solid colors, and blurred presets. The blurred presets combine with the selected wallpaper or solid color background, precompute image-backed blur for preview performance, and render through the same exporter path used by save, copy, and drag-to-app.
 - Watermark annotations are editable items with text, style, opacity, size, rotation, and color controls; export/copy/share/upload render them through the same final image pipeline as other annotations.
 - The crop tool can shrink or expand the editable canvas. Dragging crop handles outside the source image creates empty canvas space that accepts the same annotations as the original image area and is included in export/copy/share/upload.
@@ -431,6 +432,7 @@ flowchart TD
 | `Snapzy/Services/Capture/ScreenCaptureManager.swift` | Core screenshot engine, frozen snapshot capture, and file writing |
 | `Snapzy/Services/Capture/FrozenAreaCaptureSession.swift` | Frozen display snapshots used by area screenshot selection |
 | `Snapzy/Services/Capture/PostCaptureActionHandler.swift` | Quick Access, clipboard, and screenshot auto-open routing |
+| `Snapzy/Services/Capture/ScreenshotPresetAutoApplier.swift` | Lightweight default canvas preset render and editable session creation during post-capture routing |
 | `Snapzy/Services/Capture/TempCaptureManager.swift` | Save-vs-temp destination logic and temp capture lifecycle |
 | `Snapzy/Services/Capture/ScrollingCapture/ScrollingCaptureCoordinator.swift` | Long screenshot session orchestration |
 | `Snapzy/Services/Capture/ScrollingCapture/ScrollingCaptureStitcher.swift` | Stitching and Vision-assisted recovery |
@@ -446,7 +448,7 @@ flowchart TD
 | `Snapzy/Features/Annotate/Models/PersistedAnnotationSession.swift` | Codable sidecar manifest and persisted annotation models |
 | `Snapzy/Features/Annotate/InlineAreaAnnotateSession.swift` | Session state machine (selecting → annotating), key handling, finish/cancel |
 | `Snapzy/Features/Annotate/InlineAreaAnnotateWindow.swift` | Full overlay UI: selection gesture, canvas, toolbar, properties bar, action rail, resize handles |
-| `Snapzy/Features/Annotate/Services/AnnotateExporter.swift` | Final image render/export |
+| `Snapzy/Features/Annotate/Services/AnnotateExporter.swift` | Final image render/export plus lightweight canvas-effect rendering for screenshot default presets |
 | `Snapzy/Services/History/CaptureHistoryRetentionService.swift` | History retention, media cleanup, thumbnail cleanup, and orphan annotation sidecar cleanup |
 | `Snapzy/Features/VideoEditor/VideoEditorManager.swift` | Video editor window lifecycle |
 | `Snapzy/Features/VideoEditor/Services/VideoEditorAutoFocusEngine.swift` | Follow Mouse / Smart Camera path reconstruction |

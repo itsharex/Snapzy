@@ -27,24 +27,21 @@ final class HistoryThumbnailGenerator {
     qos: .utility,
     attributes: .concurrent
   )
+  private let thumbnailsDirectoryURL: URL
   private let stateQueue = DispatchQueue(label: "snapzy.history-thumbnail-generator.state")
   private let memoryCache = NSCache<NSString, NSImage>()
   private var inFlightRequests: [String: [(NSImage?) -> Void]] = [:]
   private var memoryCacheKeysByRecordId: [UUID: Set<String>] = [:]
 
   var thumbnailsDirectory: URL {
-    let appSupport = FileManager.default.urls(
-      for: .applicationSupportDirectory, in: .userDomainMask
-    ).first!
-    return appSupport
-      .appendingPathComponent("Snapzy", isDirectory: true)
-      .appendingPathComponent("HistoryThumbnails", isDirectory: true)
+    thumbnailsDirectoryURL
   }
 
-  private init() {
+  init(thumbnailsDirectory: URL? = nil) {
+    self.thumbnailsDirectoryURL = thumbnailsDirectory ?? Self.defaultThumbnailsDirectory()
     do {
       try FileManager.default.createDirectory(
-        at: thumbnailsDirectory,
+        at: thumbnailsDirectoryURL,
         withIntermediateDirectories: true
       )
     } catch {
@@ -52,6 +49,15 @@ final class HistoryThumbnailGenerator {
     }
     memoryCache.countLimit = 160
     memoryCache.totalCostLimit = 48 * 1024 * 1024
+  }
+
+  private static func defaultThumbnailsDirectory() -> URL {
+    let appSupport = FileManager.default.urls(
+      for: .applicationSupportDirectory, in: .userDomainMask
+    ).first!
+    return appSupport
+      .appendingPathComponent("Snapzy", isDirectory: true)
+      .appendingPathComponent("HistoryThumbnails", isDirectory: true)
   }
 
   // MARK: - Public API

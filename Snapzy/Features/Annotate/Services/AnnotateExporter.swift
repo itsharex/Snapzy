@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import CoreImage
 import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
@@ -254,6 +255,89 @@ final class AnnotateExporter {
     }
 
     return newURL
+  }
+
+  static func renderCanvasEffects(
+    sourceImage: NSImage,
+    effects: AnnotationCanvasEffects
+  ) -> NSImage? {
+    let startedAt = CFAbsoluteTimeGetCurrent()
+    var outputSizeDescription = "nil"
+    defer {
+      let durationMs = Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000)
+      DiagnosticLogger.shared.log(.debug, .annotate, "Render canvas effects completed", context: [
+        "background": "\(effects.backgroundStyle)",
+        "outputSize": outputSizeDescription,
+        "durationMs": "\(durationMs)"
+      ])
+    }
+
+    let effectiveBounds = CGRect(origin: .zero, size: sourceImage.size)
+    let padding = effects.backgroundStyle != .none ? effects.padding : 0
+    let alignmentSpace: CGFloat = effects.imageAlignment != .center ? 40 : 0
+
+    let totalSize: NSSize = effects.aspectRatio.canvasSize(
+      for: effectiveBounds.size,
+      padding: padding,
+      alignmentSpace: alignmentSpace,
+      orientation: effects.aspectRatioOrientation
+    )
+    outputSizeDescription = "\(Int(totalSize.width))x\(Int(totalSize.height))"
+
+    let scale = sourceImageScale(sourceImage)
+    let pixelWidth = max(1, Int(ceil(totalSize.width * scale)))
+    let pixelHeight = max(1, Int(ceil(totalSize.height * scale)))
+
+    guard let bitmapRep = NSBitmapImageRep(
+      bitmapDataPlanes: nil,
+      pixelsWide: pixelWidth,
+      pixelsHigh: pixelHeight,
+      bitsPerSample: 8,
+      samplesPerPixel: 4,
+      hasAlpha: true,
+      isPlanar: false,
+      colorSpaceName: .deviceRGB,
+      bytesPerRow: 0,
+      bitsPerPixel: 0
+    ) else { return nil }
+    bitmapRep.size = totalSize
+
+    guard let graphicsContext = NSGraphicsContext(bitmapImageRep: bitmapRep) else { return nil }
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    NSGraphicsContext.current = graphicsContext
+
+    let context = graphicsContext.cgContext
+    drawBackground(effects: effects, in: context, size: totalSize)
+
+    let destinationOrigin = destinationOrigin(
+      imageSize: effectiveBounds.size,
+      totalSize: totalSize,
+      alignment: effects.imageAlignment
+    )
+
+    if effects.cornerRadius > 0 {
+      let clipRect = NSRect(
+        x: destinationOrigin.x,
+        y: destinationOrigin.y,
+        width: effectiveBounds.width,
+        height: effectiveBounds.height
+      )
+      let path = NSBezierPath(roundedRect: clipRect, xRadius: effects.cornerRadius, yRadius: effects.cornerRadius)
+      path.addClip()
+    }
+
+    drawSourceImage(
+      sourceImage,
+      effectiveBounds: effectiveBounds,
+      destinationOrigin: destinationOrigin,
+      in: context
+    )
+    context.resetClip()
+
+    let image = NSImage(size: totalSize)
+    image.addRepresentation(bitmapRep)
+    return image
   }
 
   static func renderFinalImage(state: AnnotateState) -> NSImage? {
@@ -664,6 +748,62 @@ final class AnnotateExporter {
     }
   }
 
+  private static func drawBackground(effects: AnnotationCanvasEffects, in context: CGContext, size: NSSize) {
+    let rect = CGRect(origin: .zero, size: size)
+
+    switch effects.backgroundStyle {
+    case .none:
+      break
+
+    case .gradient(let preset):
+      drawLinearGradient(colors: preset.colors, in: context, size: size)
+
+    case .solidColor(let color):
+      context.setFillColor(NSColor(color).cgColor)
+      context.fill(rect)
+      if isBlurredBackgroundEffectActive(effects) {
+        drawBlurredBackgroundTint(effect: effects.blurredBackgroundEffect, in: context, rect: rect)
+      }
+
+    case .wallpaper(let url):
+      if url.scheme == "preset",
+         let presetName = url.host,
+         let preset = WallpaperPreset(rawValue: presetName) {
+        drawLinearGradient(colors: preset.colors, in: context, size: size)
+        return
+      }
+      let preferBlurred = isBlurredBackgroundEffectActive(effects)
+      if let wallpaper = resolveWallpaperImage(
+        for: url,
+        blurredEffect: effects.blurredBackgroundEffect,
+        preferBlurred: preferBlurred
+      ) {
+        wallpaper.draw(in: rect)
+        if preferBlurred {
+          drawBlurredBackgroundTint(effect: effects.blurredBackgroundEffect, in: context, rect: rect)
+        }
+      }
+
+    case .blurred(let url):
+      if let wallpaper = resolveWallpaperImage(
+        for: url,
+        blurredEffect: effects.blurredBackgroundEffect,
+        preferBlurred: true
+      ) {
+        wallpaper.draw(in: rect)
+        drawBlurredBackgroundTint(effect: effects.blurredBackgroundEffect, in: context, rect: rect)
+      }
+    }
+  }
+
+  private static func isBlurredBackgroundEffectActive(_ effects: AnnotationCanvasEffects) -> Bool {
+    guard effects.backgroundStyle.supportsBlurredBackgroundEffect else { return false }
+    if case .blurred = effects.backgroundStyle {
+      return true
+    }
+    return effects.isBlurredBackgroundEnabled
+  }
+
   private static func drawLinearGradient(colors: [Color], in context: CGContext, size: NSSize) {
     let cgColors = colors.map { NSColor($0).cgColor }
     let gradient = CGGradient(
@@ -697,6 +837,18 @@ final class AnnotateExporter {
     return nil
   }
 
+  private static func resolveWallpaperImage(
+    for url: URL,
+    blurredEffect: BlurredBackgroundEffect,
+    preferBlurred: Bool
+  ) -> NSImage? {
+    let image = SandboxFileAccessManager.shared.withScopedAccess(to: url) {
+      NSImage(contentsOf: url)
+    }
+    guard preferBlurred else { return image }
+    return makeBlurredBackgroundImage(from: image, effect: blurredEffect)
+  }
+
   private static func drawBlurredBackgroundTint(
     state: AnnotateState,
     in context: CGContext,
@@ -709,6 +861,77 @@ final class AnnotateExporter {
     context.setFillColor(NSColor(effect.tintColor).withAlphaComponent(CGFloat(effect.tintOpacity)).cgColor)
     context.fill(rect)
     context.restoreGState()
+  }
+
+  private static func drawBlurredBackgroundTint(
+    effect: BlurredBackgroundEffect,
+    in context: CGContext,
+    rect: CGRect
+  ) {
+    guard effect.tintOpacity > 0 else { return }
+
+    context.saveGState()
+    context.setFillColor(NSColor(effect.tintColor).withAlphaComponent(CGFloat(effect.tintOpacity)).cgColor)
+    context.fill(rect)
+    context.restoreGState()
+  }
+
+  private static func makeBlurredBackgroundImage(
+    from image: NSImage?,
+    effect: BlurredBackgroundEffect
+  ) -> NSImage? {
+    guard let image,
+          let tiffData = image.tiffRepresentation,
+          let ciImage = CIImage(data: tiffData) else { return nil }
+
+    let blurFilter = CIFilter(name: "CIGaussianBlur")
+    blurFilter?.setValue(ciImage.clampedToExtent(), forKey: kCIInputImageKey)
+    blurFilter?.setValue(effect.blurRadius, forKey: kCIInputRadiusKey)
+
+    guard let blurredOutput = blurFilter?.outputImage else { return nil }
+
+    let colorFilter = CIFilter(name: "CIColorControls")
+    colorFilter?.setValue(blurredOutput, forKey: kCIInputImageKey)
+    colorFilter?.setValue(effect.saturation, forKey: kCIInputSaturationKey)
+    colorFilter?.setValue(effect.brightness, forKey: kCIInputBrightnessKey)
+
+    guard let output = colorFilter?.outputImage else { return nil }
+
+    let croppedOutput = output.cropped(to: ciImage.extent)
+    let rep = NSCIImageRep(ciImage: croppedOutput)
+    let blurred = NSImage(size: rep.size)
+    blurred.addRepresentation(rep)
+    return blurred
+  }
+
+  private static func destinationOrigin(
+    imageSize: CGSize,
+    totalSize: CGSize,
+    alignment: ImageAlignment
+  ) -> CGPoint {
+    let totalExtraWidth = totalSize.width - imageSize.width
+    let totalExtraHeight = totalSize.height - imageSize.height
+
+    switch alignment {
+    case .center:
+      return CGPoint(x: totalExtraWidth / 2, y: totalExtraHeight / 2)
+    case .topLeft:
+      return CGPoint(x: 0, y: totalExtraHeight)
+    case .top:
+      return CGPoint(x: totalExtraWidth / 2, y: totalExtraHeight)
+    case .topRight:
+      return CGPoint(x: totalExtraWidth, y: totalExtraHeight)
+    case .left:
+      return CGPoint(x: 0, y: totalExtraHeight / 2)
+    case .right:
+      return CGPoint(x: totalExtraWidth, y: totalExtraHeight / 2)
+    case .bottomLeft:
+      return .zero
+    case .bottom:
+      return CGPoint(x: totalExtraWidth / 2, y: 0)
+    case .bottomRight:
+      return CGPoint(x: totalExtraWidth, y: 0)
+    }
   }
 
 

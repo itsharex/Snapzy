@@ -28,14 +28,15 @@ jobs:
     steps:
       - name: Determine if release should run
         id: check
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             echo "version_type=${{ inputs.version_type }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "push" ]; then
-            COMMIT_MSG="${{ github.event.head_commit.message }}"
-            if echo "$COMMIT_MSG" | grep -qE "^release\((patch|minor|major)\):"; then
-              TYPE=$(echo "$COMMIT_MSG" | sed -E 's/^release\((patch|minor|major)\):.*/\1/')
+            if printf '%s\n' "$COMMIT_MSG" | grep -qE "^release\((patch|minor|major)\):"; then
+              TYPE=$(printf '%s\n' "$COMMIT_MSG" | sed -nE 's/^release\((patch|minor|major)\):.*/\1/p' | head -n 1)
               echo "should_release=true" >> "$GITHUB_OUTPUT"
               echo "version_type=$TYPE" >> "$GITHUB_OUTPUT"
             else
