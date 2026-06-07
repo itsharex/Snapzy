@@ -180,6 +180,7 @@ final class AnnotateState: ObservableObject {
   @Published var rectangleCornerRadius: CGFloat = 0
   @Published var blurType: BlurType = .pixelated
   @Published var arrowStyle: ArrowStyle = .straight
+  @Published var arrowBendDirection: ArrowBendDirection = .primary
   @Published var watermarkText: String = "Snapzy"
   @Published private var annotationToolProperties: [AnnotationToolType: AnnotationProperties] = [:]
   private var isQuickPropertiesGestureEditing = false
@@ -2450,8 +2451,24 @@ final class AnnotateState: ObservableObject {
           case .arrow(let geometry) = annotations[index].type else { return }
 
     let updated = geometry.withStyle(style)
+    guard updated != geometry else { return }
+
     annotations[index].type = .arrow(updated)
     annotations[index].bounds = updated.bounds()
+    hasUnsavedChanges = true
+  }
+
+  func updateArrowBendDirection(id: UUID, bendDirection: ArrowBendDirection) {
+    guard let index = annotations.firstIndex(where: { $0.id == id }),
+          case .arrow(let geometry) = annotations[index].type,
+          geometry.style.supportsBendDirection else { return }
+
+    let updated = geometry.withBendDirection(bendDirection)
+    guard updated != geometry else { return }
+
+    annotations[index].type = .arrow(updated)
+    annotations[index].bounds = updated.bounds()
+    hasUnsavedChanges = true
   }
 
   func updateBlurType(id: UUID, blurType: BlurType) {
@@ -2727,9 +2744,40 @@ final class AnnotateState: ObservableObject {
   func setActiveArrowStyle(_ style: ArrowStyle) {
     let arrowAnnotations = selectedArrowAnnotations
     if !arrowAnnotations.isEmpty {
+      if arrowAnnotations.contains(where: {
+        guard case .arrow(let geometry) = $0.type else { return false }
+        return geometry.style != style
+      }) {
+        saveState()
+      }
       arrowAnnotations.forEach { updateArrowStyle(id: $0.id, style: style) }
     } else {
       arrowStyle = style
+    }
+  }
+
+  var activeArrowBendDirection: ArrowBendDirection {
+    if let annotation = selectedArrowAnnotations.first,
+       case .arrow(let geometry) = annotation.type {
+      return geometry.bendDirection
+    }
+    return arrowBendDirection
+  }
+
+  func setActiveArrowBendDirection(_ bendDirection: ArrowBendDirection) {
+    let arrowAnnotations = selectedArrowAnnotations
+    if !arrowAnnotations.isEmpty {
+      if arrowAnnotations.contains(where: {
+        guard case .arrow(let geometry) = $0.type else { return false }
+        return geometry.style.supportsBendDirection && geometry.bendDirection != bendDirection
+      }) {
+        saveState()
+      }
+      arrowAnnotations.forEach {
+        updateArrowBendDirection(id: $0.id, bendDirection: bendDirection)
+      }
+    } else {
+      arrowBendDirection = bendDirection
     }
   }
 
@@ -3322,6 +3370,22 @@ final class AnnotateState: ObservableObject {
     return quickPropertiesTool == .arrow
   }
 
+  var quickPropertiesSupportsArrowBendDirection: Bool {
+    guard quickPropertiesSupportsArrowStyle else {
+      return false
+    }
+
+    let selected = quickPropertiesSelectionAnnotations
+    if !selected.isEmpty {
+      return selected.contains {
+        guard case .arrow(let geometry) = $0.type else { return false }
+        return geometry.style.supportsBendDirection
+      }
+    }
+
+    return quickPropertiesTool == .arrow && activeArrowStyle.supportsBendDirection
+  }
+
   var quickArrowStyleBinding: Binding<ArrowStyle> {
     Binding(
       get: { [weak self] in
@@ -3329,6 +3393,17 @@ final class AnnotateState: ObservableObject {
       },
       set: { [weak self] newStyle in
         self?.setActiveArrowStyle(newStyle)
+      }
+    )
+  }
+
+  var quickArrowBendDirectionBinding: Binding<ArrowBendDirection> {
+    Binding(
+      get: { [weak self] in
+        self?.activeArrowBendDirection ?? .primary
+      },
+      set: { [weak self] newDirection in
+        self?.setActiveArrowBendDirection(newDirection)
       }
     )
   }

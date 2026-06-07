@@ -41,11 +41,39 @@ final class ArrowGeometryTests: XCTestCase {
     XCTAssertEqual(points[2], CGPoint(x: 20, y: 100))
   }
 
+  func testElbow_alternateControlPoint_usesOppositeCorner() {
+    let geo = ArrowGeometry(
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: 100, y: 30),
+      style: .elbow,
+      bendDirection: .alternate
+    )
+    let points = geo.sampledPoints()
+    XCTAssertEqual(points.count, 3)
+    XCTAssertEqual(points[0], CGPoint(x: 0, y: 0))
+    XCTAssertEqual(points[1], CGPoint(x: 0, y: 30))
+    XCTAssertEqual(points[2], CGPoint(x: 100, y: 30))
+    XCTAssertEqual(geo.bendDirection, .alternate)
+  }
+
   func testCurve_defaultControlPoint_offsetAboveMidpoint() {
     let geo = ArrowGeometry(start: CGPoint(x: 0, y: 0), end: CGPoint(x: 100, y: 0), style: .curve)
     let control = geo.resolvedControlPoint!
     XCTAssertEqual(control.x, 50, accuracy: 0.001)
     XCTAssertGreaterThan(control.y, 0)
+  }
+
+  func testCurve_alternateControlPoint_mirrorsBelowMidpoint() {
+    let geo = ArrowGeometry(
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: 100, y: 0),
+      style: .curve,
+      bendDirection: .alternate
+    )
+    let control = geo.resolvedControlPoint!
+    XCTAssertEqual(control.x, 50, accuracy: 0.001)
+    XCTAssertLessThan(control.y, 0)
+    XCTAssertEqual(geo.bendDirection, .alternate)
   }
 
   func testCurve_sampledPoints_nonTrivial() {
@@ -124,5 +152,79 @@ final class ArrowGeometryTests: XCTestCase {
     XCTAssertEqual(elbow.style, .elbow)
     XCTAssertEqual(elbow.start, geo.start)
     XCTAssertEqual(elbow.end, geo.end)
+  }
+
+  func testWithStyle_preservesAlternateBendBetweenCurvedStyles() {
+    let geo = ArrowGeometry(
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: 100, y: 30),
+      style: .elbow,
+      bendDirection: .alternate
+    )
+    let curve = geo.withStyle(.curve)
+    XCTAssertEqual(curve.style, .curve)
+    XCTAssertEqual(curve.bendDirection, .alternate)
+  }
+
+  func testWithBendDirection_mirrorsRemappedCurveControlPointAcrossBaseline() throws {
+    let original = ArrowGeometry(
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: 100, y: 0),
+      style: .curve,
+      controlPoint: CGPoint(x: 30, y: 50)
+    )
+    let remapped = original.remapped(
+      from: CGRect(x: 0, y: 0, width: 100, height: 50),
+      to: CGRect(x: 10, y: 20, width: 180, height: 90)
+    )
+    let control = try XCTUnwrap(remapped.resolvedControlPoint)
+
+    let flipped = remapped.withBendDirection(.alternate)
+    let flippedControl = try XCTUnwrap(flipped.resolvedControlPoint)
+
+    XCTAssertEqual(flipped.bendDirection, .alternate)
+    XCTAssertEqual(
+      baselineProgress(flippedControl, start: remapped.start, end: remapped.end),
+      baselineProgress(control, start: remapped.start, end: remapped.end),
+      accuracy: 0.001
+    )
+    XCTAssertEqual(
+      signedPerpendicularDistance(flippedControl, start: remapped.start, end: remapped.end),
+      -signedPerpendicularDistance(control, start: remapped.start, end: remapped.end),
+      accuracy: 0.001
+    )
+  }
+
+  func testCurve_infersDirectionFromNonDefaultControlPointSide() {
+    let primary = ArrowGeometry(
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: 100, y: 0),
+      style: .curve,
+      controlPoint: CGPoint(x: 80, y: 45)
+    )
+    let alternate = ArrowGeometry(
+      start: CGPoint(x: 0, y: 0),
+      end: CGPoint(x: 100, y: 0),
+      style: .curve,
+      controlPoint: CGPoint(x: 80, y: -45)
+    )
+
+    XCTAssertEqual(primary.bendDirection, .primary)
+    XCTAssertEqual(alternate.bendDirection, .alternate)
+  }
+
+  private func signedPerpendicularDistance(_ point: CGPoint, start: CGPoint, end: CGPoint) -> CGFloat {
+    let dx = end.x - start.x
+    let dy = end.y - start.y
+    let length = max(hypot(dx, dy), 0.0001)
+    let normal = CGPoint(x: -dy / length, y: dx / length)
+    return (point.x - start.x) * normal.x + (point.y - start.y) * normal.y
+  }
+
+  private func baselineProgress(_ point: CGPoint, start: CGPoint, end: CGPoint) -> CGFloat {
+    let dx = end.x - start.x
+    let dy = end.y - start.y
+    let lengthSquared = max(dx * dx + dy * dy, 0.0001)
+    return ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
   }
 }

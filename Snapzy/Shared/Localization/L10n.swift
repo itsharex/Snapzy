@@ -4585,6 +4585,26 @@ enum L10n {
       defaultValue: "Smooth curved callout arrow",
       comment: "Helper text for the curve arrow style"
     )
+    static let arrowBend = string(
+      "annotate.arrow-bend",
+      defaultValue: "Bend",
+      comment: "Label for arrow bend direction controls"
+    )
+    static let arrowBendNormal = string(
+      "annotate.arrow-bend-normal",
+      defaultValue: "Normal",
+      comment: "Label for the default arrow bend direction"
+    )
+    static let arrowBendReversed = string(
+      "annotate.arrow-bend-reversed",
+      defaultValue: "Reversed",
+      comment: "Label for the reversed arrow bend direction"
+    )
+    static let flipArrowBend = string(
+      "annotate.flip-arrow-bend",
+      defaultValue: "Flip bend",
+      comment: "Tooltip and accessibility label for flipping arrow bend direction"
+    )
     static let xAxis = string(
       "annotate.x-axis",
       defaultValue: "X Axis",

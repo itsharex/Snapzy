@@ -63,6 +63,7 @@ final class AnnotationSessionStoreTests: XCTestCase {
       return XCTFail("Expected arrow annotation")
     }
     XCTAssertEqual(geometry.style, .curve)
+    XCTAssertEqual(geometry.bendDirection, .alternate)
     guard case .blur(.gaussian) = loaded.annotations[2].type else {
       return XCTFail("Expected gaussian blur annotation")
     }
@@ -134,6 +135,12 @@ final class AnnotationSessionStoreTests: XCTestCase {
     let originalData = try makeImageData(width: 24, height: 16)
     let cutoutData = try makeImageData(width: 8, height: 8)
     let presetId = UUID()
+    let arrowGeometry = ArrowGeometry(
+      start: CGPoint(x: 4, y: 5),
+      end: CGPoint(x: 50, y: 60),
+      style: .curve,
+      bendDirection: .alternate
+    )
     return AnnotationSessionData(
       originalImageData: originalData,
       annotations: [
@@ -155,13 +162,8 @@ final class AnnotationSessionStoreTests: XCTestCase {
         ),
         AnnotationItem(
           id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
-          type: .arrow(ArrowGeometry(
-            start: CGPoint(x: 4, y: 5),
-            end: CGPoint(x: 50, y: 60),
-            style: .curve,
-            controlPoint: CGPoint(x: 24, y: 40)
-          )),
-          bounds: CGRect(x: 4, y: 5, width: 46, height: 55),
+          type: .arrow(arrowGeometry),
+          bounds: arrowGeometry.bounds(),
           properties: AnnotationProperties(strokeColor: .red, strokeWidth: 5)
         ),
         AnnotationItem(

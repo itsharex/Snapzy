@@ -69,6 +69,13 @@ enum ArrowStyle: String, CaseIterable, Identifiable, Equatable {
 
   var id: String { rawValue }
 
+  var supportsBendDirection: Bool {
+    switch self {
+    case .straight: return false
+    case .elbow, .curve: return true
+    }
+  }
+
   var displayName: String {
     switch self {
     case .straight: return L10n.AnnotateUI.straight
@@ -94,13 +101,47 @@ enum ArrowStyle: String, CaseIterable, Identifiable, Equatable {
   }
 }
 
+enum ArrowBendDirection: String, CaseIterable, Identifiable, Equatable {
+  case primary
+  case alternate
+
+  var id: String { rawValue }
+
+  var displayName: String {
+    switch self {
+    case .primary: return L10n.AnnotateUI.arrowBendNormal
+    case .alternate: return L10n.AnnotateUI.arrowBendReversed
+    }
+  }
+
+  var icon: String {
+    switch self {
+    case .primary: return "arrow.uturn.right"
+    case .alternate: return "arrow.uturn.left"
+    }
+  }
+
+  var toggled: ArrowBendDirection {
+    switch self {
+    case .primary: return .alternate
+    case .alternate: return .primary
+    }
+  }
+}
+
 struct ArrowGeometry: Equatable {
   var start: CGPoint
   var end: CGPoint
   var style: ArrowStyle
   var controlPoint: CGPoint?
 
-  init(start: CGPoint, end: CGPoint, style: ArrowStyle, controlPoint: CGPoint? = nil) {
+  init(
+    start: CGPoint,
+    end: CGPoint,
+    style: ArrowStyle,
+    bendDirection: ArrowBendDirection = .primary,
+    controlPoint: CGPoint? = nil
+  ) {
     self.start = start
     self.end = end
     self.style = style
@@ -108,12 +149,23 @@ struct ArrowGeometry: Equatable {
       start: start,
       end: end,
       style: style,
+      bendDirection: bendDirection,
       current: controlPoint
     )
   }
 
   var resolvedControlPoint: CGPoint? {
-    Self.normalizedControlPoint(start: start, end: end, style: style, current: controlPoint)
+    Self.normalizedControlPoint(
+      start: start,
+      end: end,
+      style: style,
+      bendDirection: bendDirection,
+      current: controlPoint
+    )
+  }
+
+  var bendDirection: ArrowBendDirection {
+    Self.inferredBendDirection(start: start, end: end, style: style, controlPoint: controlPoint)
   }
 
   var isRenderable: Bool {
@@ -252,45 +304,143 @@ struct ArrowGeometry: Equatable {
   }
 
   func withStyle(_ newStyle: ArrowStyle) -> ArrowGeometry {
-    ArrowGeometry(start: start, end: end, style: newStyle)
+    ArrowGeometry(start: start, end: end, style: newStyle, bendDirection: bendDirection)
+  }
+
+  func withBendDirection(_ newDirection: ArrowBendDirection) -> ArrowGeometry {
+    guard style.supportsBendDirection else { return self }
+    guard bendDirection != newDirection else { return self }
+
+    switch style {
+    case .straight:
+      return self
+    case .elbow:
+      return ArrowGeometry(
+        start: start,
+        end: end,
+        style: style,
+        controlPoint: Self.defaultElbowControlPoint(start: start, end: end, bendDirection: newDirection)
+      )
+    case .curve:
+      let mirroredControlPoint = resolvedControlPoint
+        .map { Self.mirroredControlPoint($0, start: start, end: end) }
+        ?? Self.defaultCurveControlPoint(start: start, end: end, bendDirection: newDirection)
+      return ArrowGeometry(start: start, end: end, style: style, controlPoint: mirroredControlPoint)
+    }
   }
 
   private static func normalizedControlPoint(
     start: CGPoint,
     end: CGPoint,
     style: ArrowStyle,
+    bendDirection: ArrowBendDirection,
     current: CGPoint?
   ) -> CGPoint? {
     switch style {
     case .straight:
       return nil
     case .elbow:
-      return current ?? defaultElbowControlPoint(start: start, end: end)
+      return current ?? defaultElbowControlPoint(start: start, end: end, bendDirection: bendDirection)
     case .curve:
-      return current ?? defaultCurveControlPoint(start: start, end: end)
+      return current ?? defaultCurveControlPoint(start: start, end: end, bendDirection: bendDirection)
     }
   }
 
-  private static func defaultElbowControlPoint(start: CGPoint, end: CGPoint) -> CGPoint {
+  private static func inferredBendDirection(
+    start: CGPoint,
+    end: CGPoint,
+    style: ArrowStyle,
+    controlPoint: CGPoint?
+  ) -> ArrowBendDirection {
+    guard style.supportsBendDirection,
+          let controlPoint else {
+      return .primary
+    }
+
+    switch style {
+    case .straight:
+      return .primary
+
+    case .elbow:
+      let primary = defaultElbowControlPoint(start: start, end: end, bendDirection: .primary)
+      let alternate = defaultElbowControlPoint(start: start, end: end, bendDirection: .alternate)
+      return distanceSquared(from: controlPoint, to: alternate) < distanceSquared(from: controlPoint, to: primary)
+        ? .alternate
+        : .primary
+
+    case .curve:
+      let dx = end.x - start.x
+      let dy = end.y - start.y
+      let length = hypot(dx, dy)
+      guard length > 0.0001 else { return .primary }
+
+      let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+      let normal = CGPoint(x: -dy / length, y: dx / length)
+      let offsetFromMidpoint = CGPoint(x: controlPoint.x - mid.x, y: controlPoint.y - mid.y)
+      let side = offsetFromMidpoint.x * normal.x + offsetFromMidpoint.y * normal.y
+      return side < 0 ? .alternate : .primary
+    }
+  }
+
+  private static func defaultElbowControlPoint(
+    start: CGPoint,
+    end: CGPoint,
+    bendDirection: ArrowBendDirection
+  ) -> CGPoint {
     let dx = abs(end.x - start.x)
     let dy = abs(end.y - start.y)
 
-    if dx >= dy {
+    switch bendDirection {
+    case .primary:
+      if dx >= dy {
+        return CGPoint(x: end.x, y: start.y)
+      }
+      return CGPoint(x: start.x, y: end.y)
+    case .alternate:
+      if dx >= dy {
+        return CGPoint(x: start.x, y: end.y)
+      }
       return CGPoint(x: end.x, y: start.y)
     }
-    return CGPoint(x: start.x, y: end.y)
   }
 
-  private static func defaultCurveControlPoint(start: CGPoint, end: CGPoint) -> CGPoint {
+  private static func defaultCurveControlPoint(
+    start: CGPoint,
+    end: CGPoint,
+    bendDirection: ArrowBendDirection
+  ) -> CGPoint {
     let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
     let dx = end.x - start.x
     let dy = end.y - start.y
     let length = max(hypot(dx, dy), 1)
     let normal = CGPoint(x: -dy / length, y: dx / length)
-    let offset = min(max(length * 0.22, 18), 72)
+    let offsetMagnitude = min(max(length * 0.22, 18), 72)
+    let offset = bendDirection == .primary ? offsetMagnitude : -offsetMagnitude
     return CGPoint(
       x: mid.x + normal.x * offset,
       y: mid.y + normal.y * offset
+    )
+  }
+
+  private static func distanceSquared(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
+    let dx = lhs.x - rhs.x
+    let dy = lhs.y - rhs.y
+    return dx * dx + dy * dy
+  }
+
+  private static func mirroredControlPoint(_ controlPoint: CGPoint, start: CGPoint, end: CGPoint) -> CGPoint {
+    let dx = end.x - start.x
+    let dy = end.y - start.y
+    let lengthSquared = dx * dx + dy * dy
+    guard lengthSquared > 0.0001 else {
+      return controlPoint
+    }
+
+    let progress = ((controlPoint.x - start.x) * dx + (controlPoint.y - start.y) * dy) / lengthSquared
+    let projectedPoint = CGPoint(x: start.x + progress * dx, y: start.y + progress * dy)
+    return CGPoint(
+      x: projectedPoint.x * 2 - controlPoint.x,
+      y: projectedPoint.y * 2 - controlPoint.y
     )
   }
 

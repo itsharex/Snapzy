@@ -1656,6 +1656,12 @@ private struct InlineAreaPropertiesBar: View {
               icon: \.icon,
               label: \.displayName
             )
+
+            if state.quickPropertiesSupportsArrowBendDirection {
+              InlineAreaArrowBendControl(
+                bendDirection: state.quickArrowBendDirectionBinding
+              )
+            }
           }
 
           if state.quickPropertiesSupportsWatermark {
@@ -2486,6 +2492,34 @@ private struct InlineAreaSegmentedPicker<Item: Identifiable & Equatable>: View {
           .help(item[keyPath: label])
         }
       }
+    }
+  }
+}
+
+private struct InlineAreaArrowBendControl: View {
+  @Binding var bendDirection: ArrowBendDirection
+
+  var body: some View {
+    InlineAreaPropertyGroup(title: L10n.AnnotateUI.arrowBend) {
+      Button {
+        bendDirection = bendDirection.toggled
+      } label: {
+        Image(systemName: bendDirection.icon)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundColor(bendDirection == .alternate ? InlineAreaChrome.itemSelectedForeground : InlineAreaChrome.secondaryText)
+          .frame(width: 25, height: InlineAreaChrome.propertyControlHeight)
+          .background(
+            RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
+              .fill(bendDirection == .alternate ? InlineAreaChrome.itemSelectedBackground : InlineAreaChrome.itemBackground)
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: InlineAreaChrome.controlCornerRadius, style: .continuous)
+              .stroke(bendDirection == .alternate ? InlineAreaChrome.itemSelectedBorder : InlineAreaChrome.itemBorder, lineWidth: 1)
+          )
+      }
+      .buttonStyle(.plain)
+      .help("\(L10n.AnnotateUI.flipArrowBend): \(bendDirection.displayName)")
+      .accessibilityLabel(L10n.AnnotateUI.flipArrowBend)
     }
   }
 }

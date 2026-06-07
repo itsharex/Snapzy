@@ -629,6 +629,100 @@ final class AnnotateCoreTests: XCTestCase {
     XCTAssertGreaterThan(annotation.bounds.height, 0)
   }
 
+  func testAnnotationFactory_usesArrowBendDirectionFromContext() throws {
+    let annotation = try XCTUnwrap(AnnotationFactory.createAnnotation(
+      tool: .arrow,
+      from: CGPoint(x: 10, y: 20),
+      to: CGPoint(x: 90, y: 80),
+      path: [],
+      context: makeContext(arrowStyle: .curve, arrowBendDirection: .alternate)
+    ))
+
+    guard case .arrow(let geometry) = annotation.type else {
+      return XCTFail("Expected arrow annotation, got \(annotation.type)")
+    }
+    XCTAssertEqual(geometry.style, .curve)
+    XCTAssertEqual(geometry.bendDirection, .alternate)
+  }
+
+  @MainActor
+  func testAnnotateStateArrowBendDirectionUpdatesNextCreatedArrow() throws {
+    let state = makeAnnotateState()
+    state.arrowStyle = .curve
+    state.setActiveArrowBendDirection(.alternate)
+
+    let annotation = try XCTUnwrap(AnnotationFactory.createAnnotation(
+      tool: .arrow,
+      from: CGPoint(x: 10, y: 20),
+      to: CGPoint(x: 90, y: 80),
+      path: [],
+      state: state
+    ))
+
+    guard case .arrow(let geometry) = annotation.type else {
+      return XCTFail("Expected arrow annotation, got \(annotation.type)")
+    }
+    XCTAssertEqual(geometry.bendDirection, .alternate)
+  }
+
+  @MainActor
+  func testAnnotateStateArrowBendDirectionUpdatesSelectedArrow() throws {
+    let state = makeAnnotateState()
+    let geometry = ArrowGeometry(
+      start: CGPoint(x: 10, y: 20),
+      end: CGPoint(x: 90, y: 80),
+      style: .curve
+    )
+    let annotation = AnnotationItem(
+      type: .arrow(geometry),
+      bounds: geometry.bounds(),
+      properties: AnnotationProperties()
+    )
+    state.annotations.append(annotation)
+    state.selectedAnnotationId = annotation.id
+
+    state.setActiveArrowBendDirection(.alternate)
+
+    let updated = try XCTUnwrap(state.annotations.first)
+    guard case .arrow(let updatedGeometry) = updated.type else {
+      return XCTFail("Expected arrow annotation, got \(updated.type)")
+    }
+    XCTAssertEqual(updatedGeometry.bendDirection, .alternate)
+    XCTAssertEqual(updated.bounds, updatedGeometry.bounds())
+  }
+
+  @MainActor
+  func testAnnotateStateArrowBendDirectionRecordsUndoAndDirtyState() throws {
+    let state = makeAnnotateState()
+    let geometry = ArrowGeometry(
+      start: CGPoint(x: 10, y: 20),
+      end: CGPoint(x: 90, y: 80),
+      style: .curve
+    )
+    let annotation = AnnotationItem(
+      type: .arrow(geometry),
+      bounds: geometry.bounds(),
+      properties: AnnotationProperties()
+    )
+    state.annotations.append(annotation)
+    state.selectedAnnotationId = annotation.id
+
+    state.hasUnsavedChanges = false
+    state.setActiveArrowBendDirection(.alternate)
+
+    XCTAssertTrue(state.hasUnsavedChanges)
+    XCTAssertTrue(state.canUndo)
+
+    state.undo()
+
+    let restored = try XCTUnwrap(state.annotations.first)
+    guard case .arrow(let restoredGeometry) = restored.type else {
+      return XCTFail("Expected arrow annotation, got \(restored.type)")
+    }
+    XCTAssertEqual(restoredGeometry.bendDirection, .primary)
+    XCTAssertTrue(state.canRedo)
+  }
+
   func testAnnotationProperties_clampControlValueAndDerivedSizes() {
     XCTAssertEqual(AnnotationProperties.clampedControlValue(-10), 1)
     XCTAssertEqual(AnnotationProperties.clampedControlValue(30), 20)
@@ -1482,6 +1576,7 @@ final class AnnotateCoreTests: XCTestCase {
   private func makeContext(
     properties: AnnotationProperties = AnnotationProperties(),
     arrowStyle: ArrowStyle = .straight,
+    arrowBendDirection: ArrowBendDirection = .primary,
     blurType: BlurType = .pixelated,
     counterValue: Int = 1,
     watermarkText: String = "Snapzy",
@@ -1490,6 +1585,7 @@ final class AnnotateCoreTests: XCTestCase {
     AnnotationFactory.CreationContext(
       properties: properties,
       arrowStyle: arrowStyle,
+      arrowBendDirection: arrowBendDirection,
       blurType: blurType,
       counterValue: counterValue,
       watermarkText: watermarkText,

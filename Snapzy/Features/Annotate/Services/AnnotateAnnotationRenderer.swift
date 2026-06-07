@@ -119,6 +119,7 @@ struct AnnotationRenderer {
     strokeWidth: CGFloat,
     fillColor: Color = .clear,
     arrowStyle: ArrowStyle = .straight,
+    arrowBendDirection: ArrowBendDirection = .primary,
     rectangleCornerRadius: CGFloat = 0,
     watermarkText: String = "Snapzy",
     watermarkStyle: WatermarkStyle = .diagonal,
@@ -173,7 +174,12 @@ struct AnnotationRenderer {
     case .arrow:
       let currentPoint = currentPath.last ?? start
       drawArrow(
-        ArrowGeometry(start: start, end: currentPoint, style: arrowStyle),
+        ArrowGeometry(
+          start: start,
+          end: currentPoint,
+          style: arrowStyle,
+          bendDirection: arrowBendDirection
+        ),
         strokeWidth: strokeWidth
       )
 

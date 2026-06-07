@@ -118,8 +118,8 @@ private enum QuickPropertiesDensity {
 
   var arrowControlWidth: CGFloat {
     switch self {
-    case .regular: return 138
-    case .compact: return 116
+    case .regular: return 178
+    case .compact: return 150
     }
   }
 
@@ -406,6 +406,8 @@ struct AnnotateQuickPropertiesBar: View {
       ) {
         QuickArrowStyleControl(
           selectedStyle: state.quickArrowStyleBinding,
+          bendDirection: state.quickArrowBendDirectionBinding,
+          showsBendDirection: state.quickPropertiesSupportsArrowBendDirection,
           buttonWidth: density.controlButtonWidth,
           groupSpacing: density.groupSpacing
         )
@@ -1603,6 +1605,8 @@ private struct QuickBlurTypeControl: View {
 
 private struct QuickArrowStyleControl: View {
   @Binding var selectedStyle: ArrowStyle
+  @Binding var bendDirection: ArrowBendDirection
+  let showsBendDirection: Bool
   let buttonWidth: CGFloat
   let groupSpacing: CGFloat
 
@@ -1631,6 +1635,36 @@ private struct QuickArrowStyleControl: View {
           }
           .buttonStyle(.plain)
           .help(style.displayName)
+        }
+
+        if showsBendDirection {
+          Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1, height: 18)
+            .padding(.horizontal, 1)
+
+          Button {
+            bendDirection = bendDirection.toggled
+          } label: {
+            Image(systemName: bendDirection.icon)
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundColor(bendDirection == .alternate ? .accentColor : .secondary)
+              .frame(width: buttonWidth, height: 24)
+              .background(
+                RoundedRectangle(cornerRadius: 7)
+                  .fill(bendDirection == .alternate ? Color.accentColor.opacity(0.16) : SidebarColors.itemDefault)
+              )
+              .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                  .stroke(
+                    bendDirection == .alternate ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.14),
+                    lineWidth: 1
+                  )
+              )
+          }
+          .buttonStyle(.plain)
+          .help("\(L10n.AnnotateUI.flipArrowBend): \(bendDirection.displayName)")
+          .accessibilityLabel(L10n.AnnotateUI.flipArrowBend)
         }
       }
     }
