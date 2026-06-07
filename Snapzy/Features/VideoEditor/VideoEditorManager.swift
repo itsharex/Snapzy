@@ -23,6 +23,29 @@ final class VideoEditorManager {
 
   private init() {}
 
+  // MARK: - Activation Policy Management
+
+  /// Check if any video editor windows are open
+  var hasOpenWindows: Bool {
+    !windowControllers.isEmpty || !urlWindowControllers.isEmpty || emptyWindowController != nil
+  }
+
+  /// Switch to regular app mode (visible in Dock + Cmd+Tab)
+  private func becomeRegularApp() {
+    if NSApp.activationPolicy() != .regular {
+      NSApp.setActivationPolicy(.regular)
+    }
+  }
+
+  /// Switch back to accessory mode (menu bar only) if no windows open
+  private func becomeAccessoryAppIfNeeded() {
+    guard !hasOpenWindows else { return }
+    guard !AnnotateManager.shared.hasOpenWindows else { return }
+    if NSApp.activationPolicy() != .accessory {
+      NSApp.setActivationPolicy(.accessory)
+    }
+  }
+
   /// Open video editor for a quick access item
   func openEditor(for item: QuickAccessItem) {
     guard item.isVideo else { return }
@@ -33,6 +56,9 @@ final class VideoEditorManager {
       existing.showWindow()
       return
     }
+
+    // Switch to regular app mode for Cmd+Tab visibility
+    becomeRegularApp()
 
     DiagnosticLogger.shared.log(.info, .editor, "Opening video editor", context: ["itemId": item.id.uuidString])
 
@@ -52,6 +78,7 @@ final class VideoEditorManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.cleanupWindow(for: itemId)
+          self?.becomeAccessoryAppIfNeeded()
 
           // Resume Quick Access countdown
           QuickAccessManager.shared.resumeCountdownForEditingItem(itemId)
@@ -75,6 +102,9 @@ final class VideoEditorManager {
       return
     }
 
+    // Switch to regular app mode for Cmd+Tab visibility
+    becomeRegularApp()
+
     DiagnosticLogger.shared.log(.info, .editor, "Opening video editor for URL", context: ["file": url.lastPathComponent])
 
     let controller = VideoEditorWindowController(url: url, originalURL: originalURL)
@@ -89,6 +119,7 @@ final class VideoEditorManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.cleanupURLWindow(for: url)
+          self?.becomeAccessoryAppIfNeeded()
         }
       }
       urlObservers[url] = observer
@@ -106,6 +137,9 @@ final class VideoEditorManager {
       return
     }
 
+    // Switch to regular app mode for Cmd+Tab visibility
+    becomeRegularApp()
+
     DiagnosticLogger.shared.log(.info, .editor, "Opening empty video editor")
 
     let controller = VideoEditorWindowController()
@@ -122,6 +156,7 @@ final class VideoEditorManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.emptyWindowController = nil
+          self?.becomeAccessoryAppIfNeeded()
         }
       }
     }
@@ -162,11 +197,26 @@ final class VideoEditorManager {
     }
     observers.removeAll()
 
+    for (_, observer) in urlObservers {
+      NotificationCenter.default.removeObserver(observer)
+    }
+    urlObservers.removeAll()
+
     // Close all windows
     for controller in windowControllers.values {
       controller.window?.close()
     }
     windowControllers.removeAll()
+
+    for controller in urlWindowControllers.values {
+      controller.window?.close()
+    }
+    urlWindowControllers.removeAll()
+
+    emptyWindowController?.window?.close()
+    emptyWindowController = nil
+
+    becomeAccessoryAppIfNeeded()
   }
 
   private func cleanupWindow(for itemId: UUID) {

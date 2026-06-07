@@ -8,9 +8,9 @@
 import AppKit
 
 /// Custom NSWindow for video editing with dark mode appearance
-final class VideoEditorWindow: NSWindow {
+class VideoEditorWindow: NSWindow {
   private static let activeEditorLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
-  private let restingLevel: NSWindow.Level = .normal
+  private var restingLevel: NSWindow.Level = .normal
 
   init(contentRect: NSRect) {
     super.init(
@@ -40,6 +40,12 @@ final class VideoEditorWindow: NSWindow {
     isReleasedWhenClosed = false
     center()
 
+    // Explicit normal level for proper Cmd+Tab behavior
+    level = restingLevel
+
+    // Register as managed window for normal Cmd+` cycling
+    collectionBehavior = [.managed, .participatesInCycle]
+
     applyCornerRadius()
   }
 
@@ -52,7 +58,7 @@ final class VideoEditorWindow: NSWindow {
   }
 
   func syncLevelWithFocusState() {
-    level = isKeyWindow ? Self.activeEditorLevel : restingLevel
+    level = (isKeyWindow || isMainWindow) ? Self.activeEditorLevel : restingLevel
   }
 
   /// Apply current theme from ThemeManager

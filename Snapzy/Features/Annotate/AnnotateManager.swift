@@ -64,26 +64,24 @@ final class AnnotateManager {
   /// In-memory cache: original image + annotations, keyed by QuickAccessItem.id
   private var sessionCache: [UUID: AnnotationSessionData] = [:]
 
-  /// Track if we switched to regular app mode
-  private var isRegularAppMode = false
-
   private init() {}
 
   // MARK: - Activation Policy Management
 
   /// Switch to regular app mode (visible in Dock + Cmd+Tab)
   private func becomeRegularApp() {
-    guard !isRegularAppMode else { return }
-    isRegularAppMode = true
-    NSApp.setActivationPolicy(.regular)
+    if NSApp.activationPolicy() != .regular {
+      NSApp.setActivationPolicy(.regular)
+    }
   }
 
   /// Switch back to accessory mode (menu bar only) if no windows open
   private func becomeAccessoryAppIfNeeded() {
-    guard isRegularAppMode else { return }
     guard windowControllers.isEmpty && manualWindowControllers.isEmpty else { return }
-    isRegularAppMode = false
-    NSApp.setActivationPolicy(.accessory)
+    guard !VideoEditorManager.shared.hasOpenWindows else { return }
+    if NSApp.activationPolicy() != .accessory {
+      NSApp.setActivationPolicy(.accessory)
+    }
   }
 
   /// Check if any annotate windows are open

@@ -229,11 +229,11 @@ final class AnnotateWindowController: NSWindowController, NSWindowDelegate {
   }
 
   func windowDidBecomeKey(_ notification: Notification) {
-    (notification.object as? AnnotateWindow)?.applyActiveEditorLevel()
+    (notification.object as? AnnotateWindow)?.syncLevelWithFocusState()
   }
 
   func windowDidResignKey(_ notification: Notification) {
-    (notification.object as? AnnotateWindow)?.restoreRestingLevel()
+    (notification.object as? AnnotateWindow)?.syncLevelWithFocusState()
   }
 
   func windowDidBecomeMain(_ notification: Notification) {

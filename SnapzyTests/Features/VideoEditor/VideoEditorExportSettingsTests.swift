@@ -13,24 +13,46 @@ import XCTest
 
 final class VideoEditorExportSettingsTests: XCTestCase {
 
+  private class MockVideoEditorWindow: VideoEditorWindow {
+    var stubbedIsKeyWindow = false
+    var stubbedIsMainWindow = false
+
+    override var isKeyWindow: Bool { stubbedIsKeyWindow }
+    override var isMainWindow: Bool { stubbedIsMainWindow }
+  }
+
   @MainActor
   func testVideoEditorWindowFocusSyncKeepsInactiveWindowAtRestingLevel() {
-    let window = VideoEditorWindow(
+    let window = MockVideoEditorWindow(
       contentRect: NSRect(x: 0, y: 0, width: 800, height: 600)
     )
     defer { window.close() }
 
     let activeLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
-    window.applyActiveEditorLevel()
-    XCTAssertEqual(window.level, activeLevel)
-    XCTAssertGreaterThan(window.level.rawValue, NSWindow.Level.floating.rawValue)
-
-    window.restoreRestingLevel()
-    XCTAssertEqual(window.level, .normal)
-
-    window.applyActiveEditorLevel()
+    
+    // 1. Neither key nor main -> should be normal
+    window.stubbedIsKeyWindow = false
+    window.stubbedIsMainWindow = false
     window.syncLevelWithFocusState()
     XCTAssertEqual(window.level, .normal)
+
+    // 2. Key but not main -> should be activeLevel
+    window.stubbedIsKeyWindow = true
+    window.stubbedIsMainWindow = false
+    window.syncLevelWithFocusState()
+    XCTAssertEqual(window.level, activeLevel)
+
+    // 3. Main but not key -> should be activeLevel (crucial for popovers/dropdowns)
+    window.stubbedIsKeyWindow = false
+    window.stubbedIsMainWindow = true
+    window.syncLevelWithFocusState()
+    XCTAssertEqual(window.level, activeLevel)
+
+    // 4. Both key and main -> should be activeLevel
+    window.stubbedIsKeyWindow = true
+    window.stubbedIsMainWindow = true
+    window.syncLevelWithFocusState()
+    XCTAssertEqual(window.level, activeLevel)
   }
 
   func testVideoEditorExportLayoutEvenSize_roundsToEvenMinimumDimensions() {

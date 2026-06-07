@@ -152,11 +152,11 @@ final class VideoEditorWindowController: NSWindowController, NSWindowDelegate {
   }
 
   func windowDidBecomeKey(_ notification: Notification) {
-    (notification.object as? VideoEditorWindow)?.applyActiveEditorLevel()
+    (notification.object as? VideoEditorWindow)?.syncLevelWithFocusState()
   }
 
   func windowDidResignKey(_ notification: Notification) {
-    (notification.object as? VideoEditorWindow)?.restoreRestingLevel()
+    (notification.object as? VideoEditorWindow)?.syncLevelWithFocusState()
   }
 
   func windowDidBecomeMain(_ notification: Notification) {

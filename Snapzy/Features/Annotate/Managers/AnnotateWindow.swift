@@ -30,7 +30,7 @@ extension Notification.Name {
 }
 
 /// Custom NSWindow for annotation editing with dark mode appearance
-final class AnnotateWindow: NSWindow {
+class AnnotateWindow: NSWindow {
   weak var interactionState: AnnotateState?
   private static let activeEditorLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
   private var restingLevel: NSWindow.Level = .normal
@@ -96,7 +96,7 @@ final class AnnotateWindow: NSWindow {
   }
 
   func syncLevelWithFocusState() {
-    level = isKeyWindow ? Self.activeEditorLevel : restingLevel
+    level = (isKeyWindow || isMainWindow) ? Self.activeEditorLevel : restingLevel
   }
 
   override func layoutIfNeeded() {
